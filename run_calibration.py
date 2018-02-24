@@ -1,5 +1,5 @@
 '''
-This script generates a calibration .json file from the specified calibration data and run
+This script generates a calibration .json file from the specified calibration data and
 type. The output calibration data has the following structure:
 ``
 {
@@ -60,7 +60,7 @@ parser.add_argument('infile')
 parser.add_argument('outfile', nargs='?', default=None)
 parser.add_argument('-v', '--verbose', action='store_true')
 parser.add_argument('-f', '--force', action='store_true')
-parser.add_argument('--runtype', choices=['pedestal'],
+parser.add_argument('-c', '--calibration', choices=['pedestal'],
         required=True)
 parser.add_argument('--vref', type=float, required=True)
 parser.add_argument('--vcm', type=float, required=True)
@@ -69,7 +69,7 @@ args = parser.parse_args()
 infile = args.infile
 outfile = args.outfile
 verbose = args.verbose
-runtype = args.runtype
+calibration = args.calibration
 force_overwrite = args.force
 vref = args.vref
 vcm = args.vcm
@@ -84,7 +84,7 @@ if args.verbose:
     print(infile + ' -> ' + outfile)
 
 cal_data = {}
-if runtype == 'pedestal':
+if calibration == 'pedestal':
     if verbose:
         print('Performing pedestal calibration...')
     cal_data = calibration.do_pedestal_calibration(infile, vref=vref, vcm=vcm,

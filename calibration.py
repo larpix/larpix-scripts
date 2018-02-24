@@ -7,6 +7,9 @@ import ROOT
 import sys
 
 def adc_to_v(adc, vref, vcm):
+    '''
+    Function to convert an 8-bit adc value to a voltage based on two reference voltages
+    '''
     return adc * (vref - vcm) / 256 + vcm
 
 def is_good_data(trans):
@@ -21,41 +24,88 @@ def is_good_packet(packet):
     return True
 
 def good_bins(values, step=1, min_v=None, max_v=None):
+    '''
+    Returns a list of values ranging from min-step to max+step of data (or specified min and
+    max) with the specified step size
+    '''
     if min_v is None:
         min_v = min(values)
     if max_v is None:
         max_v = max(values)
-    nsteps = int((max_v - min_v) / float(step)+1)
-    bins = np.linspace(min_v, max_v, nsteps)
+    nsteps = int((max_v - min_v) / float(step)+3)
+    bins = np.linspace(min_v-step, max_v+step, nsteps)
     return bins
 
+def inverse_interpolate(hist, y, bins):
+    '''
+    Linear interpolation to find the point at which the histogram value crosses y
+    '''
+    bins = sorted(bins)
+    x0 = hist.GetBinCenter(bins[0])
+    x1 = hist.GetBinCenter(bins[1])
+    y0 = hist.GetBinContent(bins[0])
+    y1 = hist.GetBinContent(bins[1])
+    if y1 == y0:
+        return x0
+    return (y - y0) * (x1 - x0) / (y1 - y0) + x0
+
+def integral_within_range(hist, x_low, x_high, moment=0):
+    '''
+    Calculates the integral ``x^m * f(x) dx`` of the distribution within a range
+    Assumes a uniform distribution within bins
+    '''
+    sum = 0.
+    low_bin = hist.FindBin(x_low)
+    high_bin = hist.FindBin(x_high)
+    if not high_bin == low_bin:
+        sum += hist.GetBinContent(low_bin) * (get_bin_high_edge(hist, low_bin) - x_low) / \
+            hist.GetBinWidth(low_bin) * ((get_bin_high_edge(hist, low_bin) + x_low)/2)**moment
+        sum += hist.GetBinContent(high_bin) * (x_high - hist.GetBinLowEdge(high_bin)) / \
+            hist.GetBinWidth(high_bin) * ((hist.GetBinLowEdge(high_bin) + x_high)/2)**moment
+    else:
+        sum += hist.GetBinContent(low_bin) * (x_high - x_low) / \
+            hist.GetBinWidth(low_bin) * ((x_high + x_low)/2)**moment
+    for bin in range(low_bin+1,high_bin):
+        sum += hist.GetBinContent(bin) * hist.GetBinCenter(bin)**moment
+    return sum
+
+def get_bin_high_edge(hist, bin):
+    return hist.GetBinLowEdge(bin) + hist.GetBinWidth(bin)
+
 def find_fwhm(hist, max_bin):
+    '''
+    Returns the linear interpolated half max values above and below the specified bin
+    '''
     half_max_bin_high = max_bin
     half_max_bin_low = max_bin
     max = hist.GetBinContent(max_bin)
-    while( half_max_bin_high < hist.GetNbinsX() and 
+    hm = max/2.
+    while( half_max_bin_high < hist.GetNbinsX() and
            hist.GetBinContent(half_max_bin_high) > max/2 ):
         half_max_bin_high += 1
-    while( half_max_bin_low < hist.GetNbinsX() and 
+    hm_high = inverse_interpolate(hist, hm, [half_max_bin_high, half_max_bin_high-1])
+    while( half_max_bin_low < hist.GetNbinsX() and
            hist.GetBinContent(half_max_bin_low) > max/2 ):
         half_max_bin_low -= 1
-    return hist.GetBinLowEdge(half_max_bin_high) - hist.GetBinLowEdge(half_max_bin_low)
+    hm_low = inverse_interpolate(hist, hm, [half_max_bin_low, half_max_bin_low+1])
+    return (hm_low, hm_high)
 
-def fit_dist_gaus(hist, max, min):
-    f_gaus = ROOT.TF1('f_gaus','[0]*exp(-(x-[1])^2/2/[2]^2)', min, max)
-    f_gaus.SetParameter(0, hist.GetMaximum())
-    f_gaus.SetParameter(1, hist.GetBinLowEdge(hist.GetMaximumBin()))
-    fwhm = find_fwhm(hist, hist.GetMaximumBin())
-    if fwhm != 0:
-        f_gaus.SetParameter(2, fwhm)
-    else:
-        f_gaus.SetParameter(2, hist.GetRMS())
-    result = hist.Fit('f_gaus','NLS')
+def get_peak_values(hist):
+    '''
+    Returns the peak value, the mean value within the fwhm of peak, and the sigma of the
+    peak (calculated from fwhm)
+    '''
+    max_bin = hist.GetMaximumBin()
+    max_x = hist.GetBinCenter(max_bin)
+    max_y = hist.GetBinContent(max_bin)
+    hm_low, hm_high = find_fwhm(hist, max_bin)
+    fwhm = hm_high - hm_low
+    mean_x = integral_within_range(hist, hm_low, hm_high, moment=1)/\
+        integral_within_range(hist, hm_low, hm_high)
     return_dict = {
-        'status': int(result),
-        'peak': result.Parameter(0),
-        'mean': result.Parameter(1),
-        'sigma': result.Parameter(2),
+        'peak' : max_y,
+        'mean' : mean_x,
+        'sigma' : fwhm / (2 * np.sqrt(2 * np.log(2)))
         }
     return return_dict
 
@@ -77,7 +127,7 @@ def extract_adc_dist(filename, adc_max=255, adc_min=0, adc_step=2, max_trans=Non
         if loop_data['n_trans'] == max_trans: break
         loop_data['n_trans'] += 1
         if verbose and loop_data['n_trans'] % 100 == 0:
-            print('trans: %d, trans_cut: %d, packets: %d, packets_cut: %d\r' % 
+            print('trans: %d, trans_cut: %d, packets: %d, packets_cut: %d\r' %
                   (loop_data['n_trans'], loop_data['n_trans_cut'], loop_data['n_packets'],
                    loop_data['n_packets_cut'])),
             sys.stdout.flush()
@@ -91,7 +141,7 @@ def extract_adc_dist(filename, adc_max=255, adc_min=0, adc_step=2, max_trans=Non
             continue
         loop_data['n_packets'] += len(curr_trans['packets'])
         for packet in curr_trans['packets']:
-            if not is_good_packet(packet): 
+            if not is_good_packet(packet):
                 loop_data['n_packets_cut'] += 1
                 continue
             chip_id = packet.chipid
@@ -107,13 +157,16 @@ def extract_adc_dist(filename, adc_max=255, adc_min=0, adc_step=2, max_trans=Non
                                                                                 channel_id),
                                                               ';adc;count;', len(bins)-1,
                                                               bins)
+                    adc_dist[chip_id][channel_id].Fill(adc)
                 except KeyError:
                     # Entry for chip has not been created
                     bins = good_bins([], step=adc_step, min_v=adc_min, max_v=adc_max)
-                    adc_dist[chip_id] = { 
+                    adc_dist[chip_id] = {
                         channel_id : ROOT.TH1F('c%d_ch%d_adc' % (chip_id, channel_id),
                                                ';adc;count', len(bins)-1, bins)
                         }
+                    adc_dist[chip_id][channel_id].Fill(adc)
+    print('')
     print(' N_transmissions: %4d, N_transmissions removed: %4d' % (
             loop_data['n_trans'], loop_data['n_trans_cut']))
     print(' N_packets: %4d, N_packets removed: %4d' % (
@@ -137,20 +190,19 @@ def do_pedestal_calibration(infile, vref=None, vcm=None, verbose=False):
         for channelid in adc_dist[chipid]:
             # Fit adc distributions
             if verbose:
-                print('Fit c%d-ch%d adc dist' % (chipid, channelid))
-            adc_fit = fit_dist_gaus(adc_dist[chipid][channelid], max=255, min=0)
-            if adc_fit['status'] == 0:
-                try:
-                    pedestal_data[chipid][channelid] = { 
-                        'pedestal_adc': adc_fit['mean'],
-                        'pedestal_adc_sigma': adc_fit['sigma']
-                        }
-                except KeyError:
-                    pedestal_data[chipid] = { channelid: {
-                            'pedestal_adc': adc_fit['mean'],
-                            'pedestal_adc_sigma': adc_fit['sigma']
-                            }}
-            
+                print('Calculating from c%d-ch%d adc dist' % (chipid, channelid))
+            adc_peak_values = get_peak_values(adc_dist[chipid][channelid])
+            try:
+                pedestal_data[chipid][channelid] = {
+                    'pedestal_adc': adc_peak_values['mean'],
+                    'pedestal_adc_sigma': adc_peak_values['sigma']
+                    }
+            except KeyError:
+                pedestal_data[chipid] = { channelid: {
+                        'pedestal_adc': adc_peak_values['mean'],
+                        'pedestal_adc_sigma': adc_peak_values['sigma']
+                        }}
+
             # Calculate voltage distributions
             if not vref is None and not vcm is None:
                 try:
@@ -161,20 +213,18 @@ def do_pedestal_calibration(infile, vref=None, vcm=None, verbose=False):
                             'pedestal_vref': vref,
                             'pedestal_vcm': vcm
                             }}
-                if verbose:
-                    print('Fit c%d-ch%d v dist' % (chipid, channelid))
                 adc_hist = adc_dist[chipid][channelid]
-                v_bins = np.array([adc_to_v(adc_hist.GetBinLowEdge(bin), vref, vcm) 
-                                   for bin in range(adc_hist.GetNbinsX())], dtype=float)
+                v_bins = np.array([adc_to_v(adc_hist.GetBinLowEdge(bin), vref, vcm)
+                                   for bin in range(adc_hist.GetNbinsX()+2)], dtype=float)
                 v_dist = ROOT.TH1F('c%d_ch%d_v' % (chipid, channelid),
                                    ';v;count', len(v_bins)-1, v_bins)
                 v_dist.Sumw2()
                 for bin in range(v_dist.GetNbinsX()):
-                    v_dist.Fill(v_dist.GetBinLowEdge(bin), adc_hist.GetBinContent(bin))
-                v_fit = fit_dist_gaus(v_dist, max=adc_to_v(adc_max, vref, vcm), 
-                                      min=adc_to_v(adc_min, vref, vcm))
-                if v_fit['status'] == 0:
-                    pedestal_data[chipid][channelid]['pedestal_v'] = v_fit['mean']
-                    pedestal_data[chipid][channelid]['pedestal_v_sigma'] = v_fit['sigma']
+                    v_dist.Fill(v_dist.GetBinCenter(bin), adc_hist.GetBinContent(bin))
+                    v_peak_values = get_peak_values(v_dist)
+                pedestal_data[chipid][channelid]['pedestal_v'] = v_peak_values['mean']
+                pedestal_data[chipid][channelid]['pedestal_v_sigma'] = v_peak_values['sigma']
+            if verbose:
+                print str(pedestal_data[chipid][channelid])
 
     return pedestal_data
