@@ -3,9 +3,9 @@ This script generates a calibration .json file from the specified calibration da
 type. The output calibration data has the following structure:
 ``
 {
-    chipid :
+    '<chipid>' :
     {
-        channelid :
+        '<channelid>' :
         {
         'pedestal_vref' : value,
         'pedestal_vcm' : value,
@@ -23,7 +23,7 @@ type. The output calibration data has the following structure:
 }
 ``
 Thus to extract a particular chip/channel's pedestal value use
-``calibration_data[chipid][channelid]['pedestal_v']``.
+``calibration_data[str(chipid)][str(channelid)]['pedestal_v']``.
 '''
 
 from __future__ import print_function
@@ -49,10 +49,10 @@ default_cal_data = {
 }
 
 def fill_missing_with_default(cal_data, default_cal_data=default_cal_data):
-    for chipid in cal_data.keys():
-        for channelid in cal_data[chipid].keys():
-            for cal_field in default_cal_data.keys():
-                if not cal_field in cal_data[chipid][channelid].keys():
+    for chipid in cal_data:
+        for channelid in cal_data[chipid]:
+            for cal_field in default_cal_data:
+                if not cal_field in cal_data[chipid][channelid]:
                     cal_data[chipid][channelid][cal_field] = default_cal_data[cal_field]
 
 parser = argparse.ArgumentParser()
@@ -60,7 +60,7 @@ parser.add_argument('infile')
 parser.add_argument('outfile', nargs='?', default=None)
 parser.add_argument('-v', '--verbose', action='store_true')
 parser.add_argument('-f', '--force', action='store_true')
-parser.add_argument('-c', '--calibration', choices=['pedestal'],
+parser.add_argument('-c', '--calibration', choices=['pedestal','gain'],
         required=True)
 parser.add_argument('--vref', type=float, required=True)
 parser.add_argument('--vcm', type=float, required=True)
@@ -69,7 +69,7 @@ args = parser.parse_args()
 infile = args.infile
 outfile = args.outfile
 verbose = args.verbose
-calibration = args.calibration
+calibration_type = args.calibration
 force_overwrite = args.force
 vref = args.vref
 vcm = args.vcm
@@ -84,22 +84,30 @@ if args.verbose:
     print(infile + ' -> ' + outfile)
 
 cal_data = {}
-if calibration == 'pedestal':
+if calibration_type == 'pedestal':
     if verbose:
         print('Performing pedestal calibration...')
     cal_data = calibration.do_pedestal_calibration(infile, vref=vref, vcm=vcm,
                                                    verbose=verbose)
+elif calibration_type == 'gain':
+    if verbose:
+        print('Performing gain calibration...')
+    cal_data = calibration.do_gain_calibration(infile, vref=vref, vcm=vcm,
+                                               verbose=verbose)
+
 if os.path.isfile(outfile):
     # File exists - load calibration data and update
+    prev_cal_data = {}
     try:
         prev_cal_data = json.load(open(outfile, 'r'))
-    except ValueError:
-        prev_cal_data = {}
-    for chipid in cal_data.keys():
-        for channelid in cal_data[chipid].keys():
-            if chipid in prev_cal_data.keys() and channelid in prev_cal_data[chipid].keys():
+    except ValueError as e:
+        print('Error: %s' % e)
+        pass
+    for chipid in cal_data:
+        for channelid in cal_data[chipid]:
+            if chipid in prev_cal_data and channelid in prev_cal_data[chipid]:
                 # Previous data exists - update
-                for cal_field in cal_data[chipid][channelid].keys():
+                for cal_field in cal_data[chipid][channelid]:
                     prev_cal_data[chipid][channelid][cal_field] = cal_data[chipid][channelid]\
                         [cal_field]
             else:

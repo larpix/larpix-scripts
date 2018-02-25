@@ -84,7 +84,7 @@ def find_fwhm(hist, max_bin):
            hist.GetBinContent(half_max_bin_high) > max/2 ):
         half_max_bin_high += 1
     hm_high = inverse_interpolate(hist, hm, [half_max_bin_high, half_max_bin_high-1])
-    while( half_max_bin_low < hist.GetNbinsX() and
+    while( half_max_bin_low > 0 and
            hist.GetBinContent(half_max_bin_low) > max/2 ):
         half_max_bin_low -= 1
     hm_low = inverse_interpolate(hist, hm, [half_max_bin_low, half_max_bin_low+1])
@@ -108,6 +108,48 @@ def get_peak_values(hist):
         'sigma' : fwhm / (2 * np.sqrt(2 * np.log(2)))
         }
     return return_dict
+
+def extract_chip_channel_ids(filename, max_trans=None, verbose=False):
+    la = LogAnalyzer(filename)
+    chip_channel_ids = {}
+    loop_data = {
+        'n_trans': 0,
+        'n_trans_cut': 0,
+        'n_packets': 0,
+        'n_packets_cut': 0
+        }
+
+    while True:
+        curr_trans = la.next_transmission()
+        if curr_trans is None: break
+        if loop_data['n_trans'] == max_trans: break
+        loop_data['n_trans'] += 1
+        if verbose and loop_data['n_trans'] % 100 == 0:
+            print('trans: %d, trans_cut: %d, packets: %d, packets_cut: %d\r' %
+                  (loop_data['n_trans'], loop_data['n_trans_cut'], loop_data['n_packets'],
+                   loop_data['n_packets_cut'])),
+            sys.stdout.flush()
+        if not is_good_data(curr_trans):
+            loop_data['n_trans_cut'] += 1
+            continue
+        loop_data['n_packets'] += len(curr_trans['packets'])
+        for packet in curr_trans['packets']:
+            if not is_good_packet(packet):
+                loop_data['n_packets_cut'] += 1
+                continue
+            chip_id = str(packet.chipid)
+            channel_id = str(packet.channel_id)
+            try:
+                chip_channel_ids[chip_id] += [channel_id]
+            except KeyError:
+                chip_channel_ids[chip_id] = [channel_id]
+    print('')
+    print(' N_transmissions: %4d, N_transmissions removed: %4d' % (
+            loop_data['n_trans'], loop_data['n_trans_cut']))
+    print(' N_packets: %4d, N_packets removed: %4d' % (
+            loop_data['n_packets'], loop_data['n_packets_cut']))
+    return chip_channel_ids
+        
 
 def extract_adc_dist(filename, adc_max=255, adc_min=0, adc_step=2, max_trans=None,
                      verbose=False):
@@ -144,8 +186,8 @@ def extract_adc_dist(filename, adc_max=255, adc_min=0, adc_step=2, max_trans=Non
             if not is_good_packet(packet):
                 loop_data['n_packets_cut'] += 1
                 continue
-            chip_id = packet.chipid
-            channel_id = packet.channel_id
+            chip_id = str(packet.chipid)
+            channel_id = str(packet.channel_id)
             adc = packet.dataword
             try:
                 hist = adc_dist[chip_id][channel_id]
@@ -153,7 +195,7 @@ def extract_adc_dist(filename, adc_max=255, adc_min=0, adc_step=2, max_trans=Non
             except KeyError:
                 try:
                     bins = good_bins([], step=adc_step, min_v=adc_min, max_v=adc_max)
-                    adc_dist[chip_id][channel_id] = ROOT.TH1F('c%d_ch%d_adc' % (chip_id,
+                    adc_dist[chip_id][channel_id] = ROOT.TH1F('c%s_ch%s_adc' % (chip_id,
                                                                                 channel_id),
                                                               ';adc;count;', len(bins)-1,
                                                               bins)
@@ -162,7 +204,7 @@ def extract_adc_dist(filename, adc_max=255, adc_min=0, adc_step=2, max_trans=Non
                     # Entry for chip has not been created
                     bins = good_bins([], step=adc_step, min_v=adc_min, max_v=adc_max)
                     adc_dist[chip_id] = {
-                        channel_id : ROOT.TH1F('c%d_ch%d_adc' % (chip_id, channel_id),
+                        channel_id : ROOT.TH1F('c%s_ch%s_adc' % (chip_id, channel_id),
                                                ';adc;count', len(bins)-1, bins)
                         }
                     adc_dist[chip_id][channel_id].Fill(adc)
@@ -190,7 +232,7 @@ def do_pedestal_calibration(infile, vref=None, vcm=None, verbose=False):
         for channelid in adc_dist[chipid]:
             # Fit adc distributions
             if verbose:
-                print('Calculating from c%d-ch%d adc dist' % (chipid, channelid))
+                print('Calculating from c%s-ch%s adc dist' % (chipid, channelid))
             adc_peak_values = get_peak_values(adc_dist[chipid][channelid])
             try:
                 pedestal_data[chipid][channelid] = {
@@ -215,16 +257,36 @@ def do_pedestal_calibration(infile, vref=None, vcm=None, verbose=False):
                             }}
                 adc_hist = adc_dist[chipid][channelid]
                 v_bins = np.array([adc_to_v(adc_hist.GetBinLowEdge(bin), vref, vcm)
-                                   for bin in range(adc_hist.GetNbinsX()+2)], dtype=float)
-                v_dist = ROOT.TH1F('c%d_ch%d_v' % (chipid, channelid),
+                                   for bin in range(0, adc_hist.GetNbinsX()+2)], dtype=float)
+                v_dist = ROOT.TH1F('c%s_ch%s_v' % (chipid, channelid),
                                    ';v;count', len(v_bins)-1, v_bins)
-                v_dist.Sumw2()
-                for bin in range(v_dist.GetNbinsX()):
-                    v_dist.Fill(v_dist.GetBinCenter(bin), adc_hist.GetBinContent(bin))
-                    v_peak_values = get_peak_values(v_dist)
+                for bin in range(0, adc_hist.GetNbinsX()+2):
+                    v_dist.Fill(adc_to_v(adc_hist.GetBinCenter(bin), vref, vcm),
+                                adc_hist.GetBinContent(bin))
+                v_peak_values = get_peak_values(v_dist)
                 pedestal_data[chipid][channelid]['pedestal_v'] = v_peak_values['mean']
                 pedestal_data[chipid][channelid]['pedestal_v_sigma'] = v_peak_values['sigma']
-            if verbose:
-                print str(pedestal_data[chipid][channelid])
 
     return pedestal_data
+
+def do_gain_calibration(infile, vref=None, vcm=None, verbose=False):
+    if vref is None or vcm is None:
+        return {}
+    gain_data = {}
+    id_data = extract_chip_channel_ids(infile, verbose=verbose)
+    for chip_id in id_data:
+        for channel_id in id_data[chip_id]:
+            gain_e = 1./250
+            gain_v = adc_to_v(1,vref,vcm) - adc_to_v(0,vref,vcm)
+            try:
+                gain_data[chip_id][channel_id] = {
+                    'gain_v' : gain_v,
+                    'gain_e' : gain_e
+                    }
+            except KeyError:
+                gain_data[chip_id] = { channel_id : {
+                        'gain_v' : gain_v,
+                        'gain_e' : gain_e
+                        }}
+    return gain_data
+
