@@ -277,16 +277,19 @@ def do_gain_calibration(infile, vref=None, vcm=None, verbose=False):
     for chip_id in id_data:
         for channel_id in id_data[chip_id]:
             gain_e = 1./250
-            gain_v = adc_to_v(1,vref,vcm) - adc_to_v(0,vref,vcm)
+            gain_v = adc_to_v(1, vref, vcm) - adc_to_v(0, vref, vcm)
+            gain_vcm = adc_to_v(0, vref, vcm)
             try:
                 gain_data[chip_id][channel_id] = {
                     'gain_v' : gain_v,
-                    'gain_e' : gain_e
+                    'gain_e' : gain_e,
+                    'gain_vcm' : gain_vcm
                     }
             except KeyError:
                 gain_data[chip_id] = { channel_id : {
                         'gain_v' : gain_v,
-                        'gain_e' : gain_e
+                        'gain_e' : gain_e,
+                        'gain_vcm' : gain_vcm
                         }}
     return gain_data
 

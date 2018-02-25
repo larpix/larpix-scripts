@@ -14,6 +14,7 @@ type. The output calibration data has the following structure:
         'pedestal_v' : value,
         'pedestal_v_sigma' : value,
         'gain_v' : value,
+        'gain_vcm' : value,
         'gain_e' : value,
         ...
         },
@@ -45,6 +46,7 @@ default_cal_data = {
     'pedestal_v' : 0.350,
     'pedestal_v_sigma' : 0.,
     'gain_v' : 0.005,
+    'gain_vcm' : 0.2,
     'gain_e' : 4e-6
 }
 
