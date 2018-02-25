@@ -84,7 +84,7 @@ elif args.format.lower() == 'root':
     ttree.Branch('timestamp', root_timestamp, 'timestamp/l')
     ttree.Branch('serialblock', root_serialblock, 'serialblock/I')
     ttree.Branch('v', root_v, 'v/D')
-    ttree.Branch('pdst_v', root_pdst, 'pdst_v/D')
+    ttree.Branch('pdst_v', root_pdst_v, 'pdst_v/D')
 
 geometry = PixelPlane.fromDict(layouts.load('sensor_plane_28_simple.yaml'))
 
@@ -117,13 +117,13 @@ while True:
                 current_array[current_index][3] = int(10*pixel.x)
                 current_array[current_index][4] = int(10*pixel.y)
 
-                if str(chipid) in calib_data and str(channel) in calib_data[str(chipid)]:
-                    current_array[current_index][10] = (packet.dataword) * \
+                try:
+                    current_array[current_index][10] = 1e3*((packet.dataword) * \
                         calib_data[str(chipid)][str(channel)]['gain_v'] + \
-                        calib_data[str(chipid)][str(channel)]['gain_vcm']
-                    current_array[current_index][11] = calib_data[str(chipid)][str(\
+                        calib_data[str(chipid)][str(channel)]['gain_vcm'])
+                    current_array[current_index][11] = 1e3 * calib_data[str(chipid)][str(\
                             channel)]['pedestal_v']
-                else:
+                except KeyError:
                     current_array[current_index][10] = -1
                     current_array[current_index][11] = -1
 
