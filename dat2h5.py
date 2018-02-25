@@ -121,10 +121,12 @@ while True:
                     current_array[current_index][10] = 1e3*((packet.dataword) * \
                         calib_data[str(chipid)][str(channel)]['gain_v'] + \
                         calib_data[str(chipid)][str(channel)]['gain_vcm'])
+                except KeyError:
+                    current_array[current_index][10] = -1
+                try:
                     current_array[current_index][11] = 1e3 * calib_data[str(chipid)][str(\
                             channel)]['pedestal_v']
                 except KeyError:
-                    current_array[current_index][10] = -1
                     current_array[current_index][11] = -1
 
                 cpu_time = block['time']
