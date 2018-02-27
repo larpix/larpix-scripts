@@ -171,6 +171,6 @@ else:
                 dtype=final_array.dtype)
         dset.attrs['descripiton'] = '''
     channel id | chip id | pixel id | int(10*pixel x) | int(10*pixel y) | raw ADC | raw
-    timestamp | 6-bit ADC | full timestamp | serial index | converted voltage | calib
-    pedestal voltage'''
+    timestamp | 6-bit ADC | full timestamp | serial index | converted voltage (mV) | calib
+    pedestal voltage (mV)'''
 

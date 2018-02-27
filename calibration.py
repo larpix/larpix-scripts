@@ -3,7 +3,6 @@ from larpix.larpix import Packet
 import numpy as np
 import argparse
 import json
-import ROOT
 import sys
 
 def adc_to_v(adc, vref, vcm):
@@ -32,76 +31,67 @@ def good_bins(values, step=1, min_v=None, max_v=None):
         min_v = min(values)
     if max_v is None:
         max_v = max(values)
-    nsteps = int((max_v - min_v) / float(step)+3)
+    nsteps = int((max_v - min_v) / float(step)) + 3
     bins = np.linspace(min_v-step, max_v+step, nsteps)
     return bins
 
-def inverse_interpolate(hist, y, bins):
-    '''
-    Linear interpolation to find the point at which the histogram value crosses y
-    '''
-    bins = sorted(bins)
-    x0 = hist.GetBinCenter(bins[0])
-    x1 = hist.GetBinCenter(bins[1])
-    y0 = hist.GetBinContent(bins[0])
-    y1 = hist.GetBinContent(bins[1])
-    if y1 == y0:
-        return x0
-    return (y - y0) * (x1 - x0) / (y1 - y0) + x0
-
-def integral_within_range(hist, x_low, x_high, moment=0):
+def integral_within_range((dist, bin_edges), x_low, x_high, moment=0):
     '''
     Calculates the integral ``x^m * f(x) dx`` of the distribution within a range
     Assumes a uniform distribution within bins
     '''
     sum = 0.
-    low_bin = hist.FindBin(x_low)
-    high_bin = hist.FindBin(x_high)
+    low_bin = np.digitize(x_low, bin_edges)-1
+    high_bin = np.digitize(x_high, bin_edges)-1
     if not high_bin == low_bin:
-        sum += hist.GetBinContent(low_bin) * (get_bin_high_edge(hist, low_bin) - x_low) / \
-            hist.GetBinWidth(low_bin) * ((get_bin_high_edge(hist, low_bin) + x_low)/2)**moment
-        sum += hist.GetBinContent(high_bin) * (x_high - hist.GetBinLowEdge(high_bin)) / \
-            hist.GetBinWidth(high_bin) * ((hist.GetBinLowEdge(high_bin) + x_high)/2)**moment
+        dx = bin_edges[low_bin+1] - bin_edges[low_bin]
+        sum += dist[low_bin] * (bin_edges[low_bin+1] - x_low) / dx * \
+            ((bin_edges[low_bin+1] + x_low)/2)**moment
+        dx = bin_edges[high_bin+1] - bin_edges[high_bin]
+        sum += dist[high_bin] * (x_high - bin_edges[high_bin]) / dx * \
+            ((bin_edges[high_bin] + x_high)/2)**moment
     else:
-        sum += hist.GetBinContent(low_bin) * (x_high - x_low) / \
-            hist.GetBinWidth(low_bin) * ((x_high + x_low)/2)**moment
+        dx = bin_edges[low_bin+1] - bin_edges[low_bin]
+        sum += dist[low_bin] * (x_high - x_low) / dx * \
+            ((x_high + x_low)/2)**moment
     for bin in range(low_bin+1,high_bin):
-        sum += hist.GetBinContent(bin) * hist.GetBinCenter(bin)**moment
+        sum += dist[bin] * ((bin_edges[bin+1] + bin_edges[bin])/2)**moment
     return sum
 
-def get_bin_high_edge(hist, bin):
-    return hist.GetBinLowEdge(bin) + hist.GetBinWidth(bin)
-
-def find_fwhm(hist, max_bin):
+def find_fwhm((dist, bin_edges), max_bin):
     '''
     Returns the linear interpolated half max values above and below the specified bin
     '''
-    half_max_bin_high = max_bin
-    half_max_bin_low = max_bin
-    max = hist.GetBinContent(max_bin)
+    hm_bin_high = max_bin
+    hm_bin_low = max_bin
+    max = dist[max_bin]
     hm = max/2.
-    while( half_max_bin_high < hist.GetNbinsX() and
-           hist.GetBinContent(half_max_bin_high) > max/2 ):
-        half_max_bin_high += 1
-    hm_high = inverse_interpolate(hist, hm, [half_max_bin_high, half_max_bin_high-1])
-    while( half_max_bin_low > 0 and
-           hist.GetBinContent(half_max_bin_low) > max/2 ):
-        half_max_bin_low -= 1
-    hm_low = inverse_interpolate(hist, hm, [half_max_bin_low, half_max_bin_low+1])
+    while( hm_bin_high < len(bin_edges) and dist[hm_bin_high] > hm ):
+        hm_bin_high += 1
+    yp = [dist[hm_bin_high-1], dist[hm_bin_high]]
+    xp = [(bin_edges[hm_bin_high-1] + bin_edges[hm_bin_high])/2,
+          (bin_edges[hm_bin_high] + bin_edges[hm_bin_high+1])/2] # bin center
+    hm_high = np.interp(hm, yp, xp)
+    while( hm_bin_low > 0 and dist[hm_bin_low] > hm ):
+        hm_bin_low -= 1
+    yp = [dist[hm_bin_low], dist[hm_bin_low+1]]
+    xp = [(bin_edges[hm_bin_low] + bin_edges[hm_bin_low+1])/2,
+          (bin_edges[hm_bin_low+1] + bin_edges[hm_bin_low+2])/2] # bin center
+    hm_low = np.interp(hm, yp, xp)
     return (hm_low, hm_high)
 
-def get_peak_values(hist):
+def get_peak_values((dist, bin_edges)):
     '''
     Returns the peak value, the mean value within the fwhm of peak, and the sigma of the
     peak (calculated from fwhm)
     '''
-    max_bin = hist.GetMaximumBin()
-    max_x = hist.GetBinCenter(max_bin)
-    max_y = hist.GetBinContent(max_bin)
-    hm_low, hm_high = find_fwhm(hist, max_bin)
+    max_bin = np.argmax(dist)
+    max_x = bin_edges[max_bin]
+    max_y = dist[max_bin]
+    hm_low, hm_high = find_fwhm((dist, bin_edges), max_bin)
     fwhm = hm_high - hm_low
-    mean_x = integral_within_range(hist, hm_low, hm_high, moment=1)/\
-        integral_within_range(hist, hm_low, hm_high)
+    mean_x = integral_within_range((dist, bin_edges), hm_low, hm_high, moment=1)/\
+        integral_within_range((dist, bin_edges), hm_low, hm_high)
     return_dict = {
         'peak' : max_y,
         'mean' : mean_x,
@@ -149,9 +139,9 @@ def extract_chip_channel_ids(filename, max_trans=None, verbose=False):
     print(' N_packets: %4d, N_packets removed: %4d' % (
             loop_data['n_packets'], loop_data['n_packets_cut']))
     return chip_channel_ids
-        
 
-def extract_adc_dist(filename, adc_max=255, adc_min=0, adc_step=2, max_trans=None,
+
+def extract_adc_dist(filename, adc_max=256, adc_min=0, adc_step=2, max_trans=None,
                      verbose=False):
     la = LogAnalyzer(filename)
     adc_dist = {}
@@ -161,7 +151,6 @@ def extract_adc_dist(filename, adc_max=255, adc_min=0, adc_step=2, max_trans=Non
         'n_packets': 0,
         'n_packets_cut': 0
         }
-
     chips_silenced = False # cuts out all data before first write command
     while True:
         curr_trans = la.next_transmission()
@@ -190,24 +179,18 @@ def extract_adc_dist(filename, adc_max=255, adc_min=0, adc_step=2, max_trans=Non
             channel_id = str(packet.channel_id)
             adc = packet.dataword
             try:
-                hist = adc_dist[chip_id][channel_id]
-                hist.Fill(adc)
+                hist, bins = adc_dist[chip_id][channel_id]
+                hist[np.digitize(adc, bins)-1] += 1
             except KeyError:
                 try:
                     bins = good_bins([], step=adc_step, min_v=adc_min, max_v=adc_max)
-                    adc_dist[chip_id][channel_id] = ROOT.TH1F('c%s_ch%s_adc' % (chip_id,
-                                                                                channel_id),
-                                                              ';adc;count;', len(bins)-1,
-                                                              bins)
-                    adc_dist[chip_id][channel_id].Fill(adc)
+                    adc_dist[chip_id][channel_id] = np.histogram([adc], bins)
                 except KeyError:
                     # Entry for chip has not been created
                     bins = good_bins([], step=adc_step, min_v=adc_min, max_v=adc_max)
                     adc_dist[chip_id] = {
-                        channel_id : ROOT.TH1F('c%s_ch%s_adc' % (chip_id, channel_id),
-                                               ';adc;count', len(bins)-1, bins)
+                        channel_id : np.histogram([adc], bins)
                         }
-                    adc_dist[chip_id][channel_id].Fill(adc)
     print('')
     print(' N_transmissions: %4d, N_transmissions removed: %4d' % (
             loop_data['n_trans'], loop_data['n_trans_cut']))
@@ -216,7 +199,7 @@ def extract_adc_dist(filename, adc_max=255, adc_min=0, adc_step=2, max_trans=Non
     return adc_dist
 
 def do_pedestal_calibration(infile, vref=None, vcm=None, verbose=False):
-    adc_max = 256
+    adc_max = 257
     adc_min = -1
     adc_step = 2
 
@@ -255,15 +238,14 @@ def do_pedestal_calibration(infile, vref=None, vcm=None, verbose=False):
                             'pedestal_vref': vref,
                             'pedestal_vcm': vcm
                             }}
-                adc_hist = adc_dist[chipid][channelid]
-                v_bins = np.array([adc_to_v(adc_hist.GetBinLowEdge(bin), vref, vcm)
-                                   for bin in range(0, adc_hist.GetNbinsX()+2)], dtype=float)
-                v_dist = ROOT.TH1F('c%s_ch%s_v' % (chipid, channelid),
-                                   ';v;count', len(v_bins)-1, v_bins)
-                for bin in range(0, adc_hist.GetNbinsX()+2):
-                    v_dist.Fill(adc_to_v(adc_hist.GetBinCenter(bin), vref, vcm),
-                                adc_hist.GetBinContent(bin))
-                v_peak_values = get_peak_values(v_dist)
+                adc_hist, adc_bins = adc_dist[chipid][channelid]
+                v_bins = np.array([adc_to_v(bin, vref, vcm) for bin in adc_bins],
+                                  dtype=float)
+                v_dist, v_bins = np.histogram([], v_bins)
+                for bin_idx, bin in enumerate(adc_bins[:-1]):
+                    v = adc_to_v(bin, vref, vcm)
+                    v_dist[np.digitize(v, v_bins)-1] += adc_hist[bin_idx]
+                v_peak_values = get_peak_values((v_dist, v_bins))
                 pedestal_data[chipid][channelid]['pedestal_v'] = v_peak_values['mean']
                 pedestal_data[chipid][channelid]['pedestal_v_sigma'] = v_peak_values['sigma']
 
@@ -276,9 +258,9 @@ def do_gain_calibration(infile, vref=None, vcm=None, verbose=False):
     id_data = extract_chip_channel_ids(infile, verbose=verbose)
     for chip_id in id_data:
         for channel_id in id_data[chip_id]:
-            gain_e = 1./250
-            gain_v = adc_to_v(1, vref, vcm) - adc_to_v(0, vref, vcm)
-            gain_vcm = adc_to_v(0, vref, vcm)
+            gain_e = 250. # e/mv
+            gain_v = adc_to_v(1, vref, vcm) - adc_to_v(0, vref, vcm) # v/adc
+            gain_vcm = adc_to_v(0, vref, vcm) # v offset
             try:
                 gain_data[chip_id][channel_id] = {
                     'gain_v' : gain_v,

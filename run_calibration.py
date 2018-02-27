@@ -118,12 +118,12 @@ if os.path.isfile(outfile):
                     prev_cal_data[chipid][channelid] = cal_data[chipid][channelid]
                 except KeyError:
                     prev_cal_data[chipid] = {channelid : cal_data[chipid][channelid]}
-    fill_missing_with_default(prev_cal_data)
+    #fill_missing_with_default(prev_cal_data)
     with open(outfile, 'w') as fo:
         json.dump(prev_cal_data, fo, sort_keys=True, indent=4, separators=(',',': '))
 else:
     # File does not exist - write calibration data
-    fill_missing_with_default(cal_data)
+    #fill_missing_with_default(cal_data)
     with open(outfile, 'w') as fo:
         # File exisits
         json.dump(cal_data, fo, sort_keys=True, indent=4, separators=(',',': '))
