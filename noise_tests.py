@@ -6,7 +6,7 @@ Run basic noise tests for chips
 from __future__ import absolute_import
 from larpix.quickstart import quickcontroller
 from larpix.quickstart import disable_chips
-from larpix.larpix import (flush_logger, PacketCollection)
+from larpix.larpix import (flush_logger, PacketCollection, Configuration)
 import math
 import time
 import json
@@ -294,7 +294,7 @@ def find_channel_thresholds(controller=None, board='pcb-1', chip_idx=0,
     # Print summary of scan
     print('find_channel_thresholds report:')
     print('  channel, enabled?, sat thresh (global), trim (global at %d), rate (Hz),'
-          ' pulse npackets')
+          ' pulse npackets' % coarse_threshold)
     for channel in range(32):
         if channel in channel_list:
             print('  %d, %d, %d, %d, %.2f, %d' % (channel, (channel in
