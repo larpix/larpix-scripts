@@ -3,7 +3,7 @@ This script generates a series of chip configuration .json files for a larpix bo
 Requires a .json file containing chip-ids and daisy chain data formatted like
 {
     'board': <board-name>,
-    'chip_info': [
+    'chip_set': [
         (<chip-id>, <io-chain>),
         ...
         ]
@@ -26,25 +26,65 @@ def npackets_by_channel(packets, chip_id):
             npackets[packet.channel_id] += 1
     return npackets
 
+def npackets_by_chip_channel(packets):
+    npackets = {}
+    for packet in packets:
+        try:
+            npackets[packet.chipid][packet.channel_id] += 1
+        except KeyError:
+            npackets[packet.chipid] = [0]*32
+            npackets[packet.chipid][packet.channel_id] += 1
+    return npackets
+
 def clear_buffer(controller):
     controller.run(0.1,'clear buffer (quick)')
     if len(controller.reads[-1]) > 0:
         controller.run(2,'clear buffer (slow)')
 
 parser = argparse.ArgumentParser()
-parser.add_argument('infile')
-parser.add_argument('outdir', nargs='?', default='.')
+parser.add_argument('infile',
+                    help='input file containing chipset info (required)')
+parser.add_argument('outdir', nargs='?', default='.',
+                    help='output directory for log and config files '
+                    '(optional, default: %(default)s)')
 parser.add_argument('-v', '--verbose', action='store_true')
-parser.add_argument('--global_threshold_max', default=255)
-parser.add_argument('--global_threshold_min', default=0)
-parser.add_argument('--global_threshold_step', default=1)
-parser.add_argument('--pixel_trim_max', default=31)
-parser.add_argument('--pixel_trim_min', default=0)
-parser.add_argument('--pixel_trim_step', default=1)
-parser.add_argument('--configuration_file', default='physics.json')
-parser.add_argument('--threshold_rate', default=1)
-parser.add_argument('--max_rate', default=5)
-parser.add_argument('--run_time', default=1)
+parser.add_argument('--global_threshold_max', default=40, type=int,
+                    help='maximum global threshold for coarse scan '
+                    '(optional, default: %(default)s)')
+parser.add_argument('--global_threshold_min', default=0, type=int,
+                    help='minimum global threshold for coarse scan '
+                    '(optional, default: %(default)s)')
+parser.add_argument('--global_threshold_step', default=1, type=int,
+                    help='global threshold step size for coarse scan '
+                    '(optional, default: %(default)s)')
+parser.add_argument('--pixel_trim_max', default=31, type=int,
+                    help='maximum pixel trim for fine scan '
+                    '(optional, default: %(default)s)')
+parser.add_argument('--pixel_trim_min', default=0, type=int,
+                    help='minimum pixel trim for fine scan '
+                    '(optional, default: %(default)s)')
+parser.add_argument('--pixel_trim_step', default=1, type=int,
+                    help='pixel trim step size for fine scan '
+                    '(optional, default: %(default)s)')
+parser.add_argument('--configuration_file', default='physics.json',
+                    help='initial chip configuration file to load '
+                    '(optional, default: %(default)s)')
+parser.add_argument('--threshold_rate', default=5, type=float,
+                    help='target per channel trigger rate - configuration guarantees '
+                    '< threshold_rate Hz/channel of triggers '
+                    '(optional, units: Hz, default: %(default)s)')
+parser.add_argument('--max_rate', default=20, type=float,
+                    help='maximum per channel trigger rate - configuration will disable '
+                    'channels with >= max_rate Hz of triggers at start and end of scan '
+                    '(optional, units: Hz, default: %(default)s)')
+parser.add_argument('--run_time', default=1, type=float,
+                    help='read time for calculating trigger rate - recommended that run_time '
+                    '> 1/threshold_rate '
+                    '(optional, units: sec, default: %(default)s)')
+parser.add_argument('--quick_run_time', default=0.1, type=float,
+                    help='read time for calculating trigger rate on initial quick threshold '
+                    'scan - recommended ~run_time/10 '
+                    '(optional, units: sec, default: %(default)s)')
 args = parser.parse_args()
 
 infile = args.infile
@@ -60,6 +100,7 @@ config_file = args.configuration_file
 threshold_rate = args.threshold_rate
 max_rate = args.max_rate
 run_time = args.run_time
+quick_run_time = args.quick_run_time
 
 if not os.path.exists(outdir):
     os.makedirs(outdir)
@@ -78,10 +119,10 @@ log.info('start of new run')
 
 controller = larpix.Controller()
 # Initial configuration of chips
-chip_info = json.load(open(infile,'r'))
-board_info = chip_info['board']
+chip_set = json.load(open(infile,'r'))
+board_info = chip_set['board']
 log.info('begin initial configuration of chips for board %s' % board_info)
-for chip_tuple in chip_info['chip_info']:
+for chip_tuple in chip_set['chip_set']:
     chip_id = chip_tuple[0]
     io_chain = chip_tuple[1]
     controller.chips.append(larpix.Chip(chip_id, io_chain))
@@ -108,7 +149,7 @@ for chip in controller.chips:
     pixel_trims = [pixel_trim_max]*32
     chip.config.pixel_trim_thresholds = pixel_trims
     modified_registers = range(32) + [32]
-    controller.write_configuration(chip, modified_registers) 
+    controller.write_configuration(chip, modified_registers)
     # Check for high rate channels
     controller.enable(chip_id=chip_id, io_chain=io_chain)
     high_threshold_channels = set()
@@ -139,15 +180,15 @@ for chip in controller.chips:
         chip.config.global_threshold = global_threshold
         modified_registers = 32
         controller.write_configuration(chip, modified_registers)
-        controller.run(run_time/10,'quick global threshold scan')
+        controller.run(quick_run_time,'quick global threshold scan')
         packets = controller.reads[-1]
         log.info('threshold %d - chip rate %.2f Hz' % \
-                     (global_threshold, len(packets)/run_time/10))
+                     (global_threshold, len(packets)/quick_run_time))
         npackets = npackets_by_channel(packets, chip_id)
         for channel in range(32):
-            if npackets[channel] >= threshold_rate * run_time/10:
+            if npackets[channel] >= threshold_rate * quick_run_time:
                 log.info('c%d-%d-ch%d rate is %.2f Hz' % \
-                             (chip_id, io_chain, channel, 10*npackets[channel]/run_time))
+                             (chip_id, io_chain, channel, npackets[channel]/quick_run_time))
                 break
         global_threshold -= global_threshold_step
     log.info('quick global threshold scan for c%d-%d complete: %d' % \
@@ -183,21 +224,21 @@ for chip in controller.chips:
         chip.config.pixel_trim_thresholds = pixel_trims
         modified_registers = range(32)
         controller.write_configuration(chip, modified_registers)
-        controller.run(run_time/10,'quick pixel trim scan')
+        controller.run(quick_run_time,'quick pixel trim scan')
         packets = controller.reads[-1]
         log.info('trim %d - chip rate %.2f Hz' % \
-                     (pixel_trim, len(packets)/run_time/10))
+                     (pixel_trim, len(packets)/quick_run_time))
         npackets = npackets_by_channel(packets, chip_id)
         for channel in range(32):
-            if npackets[channel] < threshold_rate * run_time/10:
+            if npackets[channel] < threshold_rate * quick_run_time:
                 if pixel_trims[channel] <= pixel_trim_min:
                     pixel_trims[channel] = pixel_trim_min
                 else:
                     pixel_trims[channel] -= pixel_trim_step
             else:
                 log.info('c%d-%d-ch%d rate is %.2f Hz' % \
-                             (chip_id, io_chain, channel, 10*npackets[channel]/run_time))
-        if all([n >= threshold_rate * run_time/10 for n in npackets]):
+                             (chip_id, io_chain, channel, npackets[channel]/quick_run_time))
+        if all([n >= threshold_rate * quick_run_time for n in npackets]):
             break
         pixel_trim -= pixel_trim_step
     log.info('quick pixel trim scan for c%d-%d complete: %s' % \
@@ -256,4 +297,31 @@ for chip in controller.chips:
     log.info('c%d-%d configuration complete' % chip_info)
 
 log.info('all chips configuration complete')
+
+# Load configuration onto chips and check final rate
+log.info('board rate check')
+for chip in controller.chips:
+    chip_id = chip.chip_id
+    io_chain = chip.io_chain
+    configuration_file = outdir + '/%s_c%d-%d_config.json' % (board_info, chip_id, io_chain)
+    chip.config.load(configuration_file)
+    controller.write_configuration(chip)
+clear_buffer(controller)
+controller.run(run_time,'check rate')
+packets = controller.reads[-1]
+log.info('%s rate: %.2f Hz' % (board_info, len(packets)/run_time))
+npackets = npackets_by_chip_channel(controller.reads[-1])
+for chip in controller.chips:
+    chip_id = chip.chip_id
+    io_chain = chip.io_chain
+    if chip_id in npackets.keys():
+        log.info('%s-c%d-%d rate: %.2f Hz' % \
+                     (board_info, chip_id, io_chain, sum(npackets[chip_id])/run_time))
+        for channel in range(32):
+            log.info('%s-c%d-%d-ch%d rate: %.2f Hz' % \
+                         (board_info, chip_id, io_chain, channel,
+                          npackets[chip_id][channel]/run_time))
+    else:
+        log.warn('%s-c%d-%d no packets received' % \
+                     (board_info, chip_id, io_chain))
 exit(0)
