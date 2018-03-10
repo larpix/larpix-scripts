@@ -104,7 +104,7 @@ quick_run_time = args.quick_run_time
 
 if not os.path.exists(outdir):
     os.makedirs(outdir)
-logfile =  outdir + '/configure_chips_%s.log' % \
+logfile = outdir + '/.configure_chips_%s.log' % \
     str(time.strftime('%Y_%m_%d_%H_%M_%S',time.localtime()))
 log = logging.getLogger(__name__)
 fhandler = logging.FileHandler(logfile)
@@ -116,6 +116,7 @@ log.addHandler(fhandler)
 log.addHandler(shandler)
 log.setLevel(logging.DEBUG)
 log.info('start of new run')
+log.info('logging to %s' % logfile)
 
 try:
     controller = larpix.Controller()
