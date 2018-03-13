@@ -193,9 +193,9 @@ try:
             clear_buffer_quick(controller)
             controller.run(quick_run_time,'quick global threshold scan')
             packets = controller.reads[-1]
-            log.info('threshold %d - chip rate %.2f Hz' % \
-                         (global_threshold, len(packets)/quick_run_time))
             npackets = npackets_by_channel(packets, chip_id)
+            log.info('threshold %d - chip rate %.2f Hz' % \
+                         (global_threshold, sum(npackets)/quick_run_time))
             for channel in range(32):
                 if npackets[channel] >= threshold_rate * quick_run_time:
                     if verbose:
@@ -220,9 +220,9 @@ try:
             clear_buffer_quick(controller)
             controller.run(run_time,'global threshold scan')
             packets = controller.reads[-1]
-            log.info('threshold %d - chip rate %.2f Hz' % \
-                         (global_threshold, len(packets)/run_time))
             npackets = npackets_by_channel(packets, chip_id)
+            log.info('threshold %d - chip rate %.2f Hz' % \
+                         (global_threshold, sum(npackets)/run_time))
             for channel in range(32):
                 if npackets[channel] > threshold_rate * run_time:
                     if verbose:
@@ -246,9 +246,9 @@ try:
             clear_buffer_quick(controller)
             controller.run(quick_run_time,'quick pixel trim scan')
             packets = controller.reads[-1]
-            log.info('trim %d - chip rate %.2f Hz' % \
-                         (pixel_trim, len(packets)/quick_run_time))
             npackets = npackets_by_channel(packets, chip_id)
+            log.info('trim %d - chip rate %.2f Hz' % \
+                         (pixel_trim, sum(npackets)/quick_run_time))
             for channel in range(32):
                 if npackets[channel] < threshold_rate * quick_run_time and \
                         not channel_at_threshold[channel]:
@@ -284,9 +284,9 @@ try:
             clear_buffer_quick(controller)
             controller.run(run_time,'pixel trim scan')
             packets = controller.reads[-1]
-            log.info('trim %d - chip rate %.2f Hz' % \
-                         (pixel_trim, len(packets)/run_time))
             npackets = npackets_by_channel(packets, chip_id)
+            log.info('trim %d - chip rate %.2f Hz' % \
+                         (pixel_trim, sum(npackets)/run_time))
             for channel in range(32):
                 if npackets[channel] > threshold_rate * run_time:
                     if verbose:
