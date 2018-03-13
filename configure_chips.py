@@ -142,7 +142,6 @@ try:
     log.info('initial configuration of chips complete')
 
     clear_buffer(controller)
-
     config_ok, different_registers = controller.verify_configuration()
     if not config_ok:
         log.warn('chip configurations were not verified')
@@ -170,6 +169,8 @@ try:
                 log.info('check rate on c%d-%d' % chip_info)
                 controller.run(run_time,'rate check c%d-%d' % chip_info)
                 npackets = npackets_by_channel(controller.reads[-1], chip_id)
+                log.info('c%d-%d has a rate of %.2f Hz' % \
+                             (chip_id, io_chain, sum(npackets)/run_time))
                 for channel,npacket in enumerate(npackets):
                     if npacket >= max_rate * run_time:
                         if verbose:
@@ -185,7 +186,8 @@ try:
                 clear_buffer(controller)
             if len(high_threshold_channels):
                 log.info('c%d-%d channels with threshold above %d: %s' % \
-                             (chip_id, io_chain, global_threshold, str(high_threshold_channels)))
+                             (chip_id, io_chain, global_threshold,
+                              str(high_threshold_channels)))
             # Perform quick global threshold scan to determine highest channel threshold
             log.info('begin quick global threshold scan for c%d-%d' % chip_info)
             break_flag = False
