@@ -37,7 +37,7 @@ def npackets_by_chip_channel(packets):
     return npackets
 
 def clear_buffer_quick(controller):
-    controller.run(0.01,'clear buffer (quick)')
+    controller.run(0.05,'clear buffer (quick)')
 
 def clear_buffer(controller):
     buffer_clear_attempts = 5
@@ -86,7 +86,7 @@ parser.add_argument('--run_time', default=1, type=float,
                     help='read time for calculating trigger rate - recommended that run_time '
                     '> 1/threshold_rate '
                     '(optional, units: sec, default: %(default)s)')
-parser.add_argument('--quick_run_time', default=0.01, type=float,
+parser.add_argument('--quick_run_time', default=0.1, type=float,
                     help='read time for calculating trigger rate on initial quick threshold '
                     'scan - recommended ~run_time/10 '
                     '(optional, units: sec, default: %(default)s)')
