@@ -126,7 +126,10 @@ log.info('start of new run')
 log.info('logging to %s' % logfile)
 
 try:
+    larpix.enable_logger()
     controller = larpix.Controller()
+    controller.use_all_chips = True # for communication noise
+    chip0 = controller.all_chips[0]
     # Initial configuration of chips
     chip_set = json.load(open(infile,'r'))
     board_info = chip_set['board']
@@ -153,6 +156,7 @@ try:
             start_time = time.time()
             chip_id = chip.chip_id
             io_chain = chip.io_chain
+            chip = controller.get_chip(chip_id, io_chain)
             chip_info = (chip_id, io_chain)
             global_threshold = global_threshold_max
             chip.config.global_threshold = global_threshold
@@ -166,8 +170,10 @@ try:
             break_flag = False
             while not break_flag:
                 break_flag = True
+                clear_buffer(controller)
                 log.info('check rate on c%d-%d' % chip_info)
-                controller.run(run_time,'rate check c%d-%d' % chip_info)
+                controller.write_configuration(chip0, range(10), write_read=run_time,
+                                               message='rate check c%d-%d' % chip_info)
                 npackets = npackets_by_channel(controller.reads[-1], chip_id)
                 log.info('c%d-%d has a rate of %.2f Hz' % \
                              (chip_id, io_chain, sum(npackets)/run_time))
@@ -197,7 +203,8 @@ try:
                 modified_registers = 32
                 controller.write_configuration(chip, modified_registers)
                 clear_buffer_quick(controller)
-                controller.run(quick_run_time,'quick global threshold scan')
+                controller.write_configuration(chip0, range(10), write_read=quick_run_time,
+                                               message='quick global threshold scan')
                 packets = controller.reads[-1]
                 npackets = npackets_by_channel(packets, chip_id)
                 log.info('threshold %d - chip rate %.2f Hz' % \
@@ -224,7 +231,8 @@ try:
                 modified_registers = 32
                 controller.write_configuration(chip, modified_registers)
                 clear_buffer_quick(controller)
-                controller.run(run_time,'global threshold scan')
+                controller.write_configuration(chip0, range(10), write_read=run_time,
+                                               message='global threshold scan')
                 packets = controller.reads[-1]
                 npackets = npackets_by_channel(packets, chip_id)
                 log.info('threshold %d - chip rate %.2f Hz' % \
@@ -250,7 +258,8 @@ try:
                 modified_registers = range(32)
                 controller.write_configuration(chip, modified_registers)
                 clear_buffer_quick(controller)
-                controller.run(quick_run_time,'quick pixel trim scan')
+                controller.write_configuration(chip0, range(10), write_read=quick_run_time,
+                                               message='quick pixel trim scan')
                 packets = controller.reads[-1]
                 npackets = npackets_by_channel(packets, chip_id)
                 log.info('trim %d - chip rate %.2f Hz' % \
@@ -289,7 +298,8 @@ try:
                 modified_registers = range(32)
                 controller.write_configuration(chip, modified_registers)
                 clear_buffer_quick(controller)
-                controller.run(run_time,'pixel trim scan')
+                controller.write_configuration(chip0, range(10), write_read=run_time,
+                                               message='pixel trim scan')
                 packets = controller.reads[-1]
                 npackets = npackets_by_channel(packets, chip_id)
                 log.info('trim %d - chip rate %.2f Hz' % \
@@ -311,7 +321,8 @@ try:
             # Check one last time for high rate channels
             log.info('checking rate with configuration')
             clear_buffer(controller)
-            controller.run(run_time,'rate check')
+            controller.write_configuration(chip0, range(10), write_read=run_time,
+                                           message='rate check')
             npackets = npackets_by_channel(controller.reads[-1], chip_id)
             log.info('c%d-%d rate is %.2f Hz' % \
                              (chip_id, io_chain, sum(npackets)/run_time))
@@ -329,7 +340,10 @@ try:
                                io_chain=io_chain)
             # Save chip configuration
             config = larpix.Configuration()
-            chip_configurations += [config.from_dict(chip.config.to_dict())]
+            config.from_dict(chip.config.to_dict())
+            if verbose:
+                log.debug(str(config))
+            chip_configurations += [config]
             configuration_file = outdir + '/%s_c%d-%d_config.json' % \
                 (board_info, chip_id, io_chain)
             config.write(configuration_file, force=True)

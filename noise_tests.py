@@ -1643,7 +1643,10 @@ def test_min_signal_amplitude(controller=None, board='pcb-1', chip_idx=0,
     for channel_idx, channel in enumerate(channel_list):
         print('configuring for chip %d channel %d' % (chip.chip_id, channel))
         # Configure chip for pulsing one channel
-        chip.config.csa_testpulse_enable[channel] = 0 # Connect
+        controller.disable(chip_id=chip.chip_id)
+        controller.enable(chip_id=chip.chip_id, channel_list=[channel])
+        chip.config.csa_testpulse_enable = [1]*32 # Disconnect all
+        chip.config.csa_testpulse_enable[channel] = 0 # Connect channel of interest
         controller.write_configuration(chip,[42,43,44,45])
         # Initialize DAC level, and issuing cross-triggers
         chip.config.csa_testpulse_dac_amplitude = testpulse_dac_max
@@ -1664,11 +1667,11 @@ def test_min_signal_amplitude(controller=None, board='pcb-1', chip_idx=0,
             pulses_issued = 0
             triggers_received = 0
             for pulse_idx in range(n_pulses):
-                if dac_level < (testpulse_dac_min + pulse_dac):
+                if dac_level < (testpulse_dac_min + dac_amp):
                     # Reset DAC level if it is too low to issue pulse
                     chip.config.csa_testpulse_dac_amplitude = testpulse_dac_max
                     controller.write_configuration(chip,46)
-                    time.sleep(reset_dac_time) # Wait for front-end to settle
+                    time.sleep(0.1) # Wait for front-end to settle
                     controller.run(0.1, 'clear buffer')
                     del controller.reads[-1]
                     dac_level = testpulse_dac_max

@@ -86,7 +86,8 @@ elif args.format.lower() == 'root':
     ttree.Branch('v', root_v, 'v/D')
     ttree.Branch('pdst_v', root_pdst_v, 'pdst_v/D')
 
-geometry = PixelPlane.fromDict(layouts.load('sensor_plane_28_simple.yaml'))
+#geometry = PixelPlane.fromDict(layouts.load('sensor_plane_28_simple.yaml'))
+geometry = PixelPlane.fromDict(layouts.load('sensor_plane_28_8chip.yaml'))
 
 numpy_arrays = []
 index_limit = 10000
