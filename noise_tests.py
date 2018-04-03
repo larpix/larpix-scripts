@@ -1627,9 +1627,9 @@ def scan_trim_with_pulse(controller=None, board='pcb-1', chip_idx=0,
 
 def test_min_signal_amplitude(controller=None, board='pcb-1', chip_idx=0,
                               channel_list=range(32), threshold=40, trim=[16]*32,
-                              threshold_trigger_rate=0.9, n_pulses=100, min_dac_amp=1,
-                              max_dac_amp=20, dac_step=1, testpulse_dac_max=235,
-                              testpulse_dac_min=40, reset_cycles=4096):
+                              threshold_trigger_rate=1.0, n_pulses=10, min_dac_amp=0,
+                              max_dac_amp=10, dac_step=1, testpulse_dac_max=255,
+                              testpulse_dac_min=128, reset_cycles=4096):
     ''' Pulse channel with increasing pulse sizes to determine the minimum pulse size for
     triggering at >90% '''
     close_controller = False
@@ -1639,8 +1639,9 @@ def test_min_signal_amplitude(controller=None, board='pcb-1', chip_idx=0,
         controller = quickcontroller(board)
         disable_chips(controller)
     chip = controller.chips[chip_idx]
-    results = {'channels_'}
+    results = {}
     for channel_idx, channel in enumerate(channel_list):
+        results[channel] = {}
         print('configuring for chip %d channel %d' % (chip.chip_id, channel))
         # Configure chip for pulsing one channel
         controller.disable(chip_id=chip.chip_id)
@@ -1682,10 +1683,17 @@ def test_min_signal_amplitude(controller=None, board='pcb-1', chip_idx=0,
                 triggers_received += len(result)
             print('pulses issued: %d, triggers received: %d' % (pulses_issued,
                                                                 triggers_received))
-
+            if triggers_received / pulses_issued >= threshold_trigger_rate:
+                results[channel]['min_pulse_dac'] = dac_amp
+                results[channel]['eff'] = triggers_received / pulses_issued
+                break
     if close_controller:
         controller.serial_close()
-    return
+    print('summary (channel, trim, min_pulse_dac, eff):')
+    for idx,channel in enumerate(results.keys()):
+        print('%d %d %d %.2f' % (channel, trim[idx], results[channel]['min_pulse_dac'],
+                                 results[channel]['eff']))
+    return results
 
 def analog_monitor(controller=None, board='pcb-5', chip_idx=0, channel=0):
     '''Connect analog monitor for this channel'''
