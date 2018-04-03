@@ -128,7 +128,6 @@ log.info('logging to %s' % logfile)
 try:
     larpix.enable_logger()
     controller = larpix.Controller()
-    controller.use_all_chips = True # for communication noise
     chip0 = controller.all_chips[0]
     # Initial configuration of chips
     chip_set = json.load(open(infile,'r'))
@@ -156,7 +155,6 @@ try:
             start_time = time.time()
             chip_id = chip.chip_id
             io_chain = chip.io_chain
-            chip = controller.get_chip(chip_id, io_chain)
             chip_info = (chip_id, io_chain)
             global_threshold = global_threshold_max
             chip.config.global_threshold = global_threshold
