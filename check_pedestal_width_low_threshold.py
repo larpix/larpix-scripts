@@ -132,13 +132,14 @@ try:
         chip_ped_rms = sum(abs(ped - chip_ped_mean) for ped in board_results[chip_idx][1]) /\
             len(board_results[chip_idx][1])
         log.info('%s-c%d-%d mean pedestal: %.2f adc, rms: %.2f adc' % \
-                         (board_info, chip_id, io_chain, chip_mean, chip_rms))
+                         (board_info, chip_id, io_chain, chip_ped_mean, chip_ped_rms))
 
         chip_width_mean = sum(board_results[chip_idx][2]) / len(board_results[chip_idx][2])
-        chip_width_rms = sum(abs(width - chip_width_mean) for width in board_results[chip_idx][2])/\
-            len(board_results[chip_idx][2])
+        chip_width_rms = sum(abs(width - chip_width_mean)
+                             for width in board_results[chip_idx][2])/\
+                             len(board_results[chip_idx][2])
         log.info('%s-c%d-%d mean width: %.2f adc, rms: %.2f adc' % \
-                         (board_info, chip_id, io_chain, chip_mean, chip_rms))
+                         (board_info, chip_id, io_chain, chip_width_mean, chip_width_rms))
         for channel_idx,channel in enumerate(board_results[chip_idx]['channel']):
             log.info('%s-c%d-%d-ch%d pedestal: %.2f adc, width: %.2f adc' % \
                          (board_info, chip_id, io_chain, channel,
