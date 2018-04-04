@@ -1420,11 +1420,11 @@ def noise_test_low_threshold(board='pcb-5', chip_idx=0, run_time=1,
     std_dev = {}
     for channel in channel_list:
         print('test channel %d' % channel)
-        print('clear buffer (slow)')
-        controller.run(1,'clear buffer')
+        #print('clear buffer (quick)')
+        controller.run(0.1,'clear buffer')
         controller.enable(chip_id=chip.chip_id, io_chain=chip.io_chain,
                           channel_list=[channel])
-        print('clear buffer (quick)')
+        #print('clear buffer (quick)')
         controller.run(0.1,'clear buffer')
         controller.run(run_time,'collect data')
         controller.disable(chip_id=chip.chip_id, io_chain=chip.io_chain)
