@@ -16,7 +16,7 @@ def clear_buffer_quick(controller):
     controller.run(0.05,'clear buffer (quick)')
 
 def clear_buffer(controller):
-    buffer_clear_attempts = 5
+    buffer_clear_attempts = 40 # ~2sec
     clear_buffer_quick(controller)
     while len(controller.reads[-1]) > 0 and buffer_clear_attempts > 0:
         clear_buffer_quick(controller)
