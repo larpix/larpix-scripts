@@ -4,7 +4,7 @@ Requires a .json file containing chip-ids and daisy chain data formatted like
 {
     'board': <board-name>,
     'chip_set': [
-        (<chip-id>, <io-chain>),
+        [<chip-id>, <io-chain>],
         ...
         ]
 }
@@ -127,7 +127,7 @@ log.info('logging to %s' % logfile)
 
 try:
     larpix.enable_logger()
-    controller = larpix.Controller()
+    controller = larpix.Controller(timeout=0.01)
     chip0 = controller.all_chips[0]
     # Initial configuration of chips
     chip_set = json.load(open(infile,'r'))

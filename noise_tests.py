@@ -42,8 +42,8 @@ def pulse_channel(controller, chip_idx=0, pulse_channel=0, n_pulses=100,
         dac_level -= pulse_dac  # Negative DAC step mimics electron arrival
         chip.config.csa_testpulse_dac_amplitude = dac_level
         controller.write_configuration(chip,46,write_read=0.3)
-        print '  pulse %d (DAC=%d): %d packets' % (pulse_idx, dac_level,
-                                                   len(controller.reads[-1]))
+        print('  pulse %d (DAC=%d): %d packets' % (pulse_idx, dac_level,
+                                                   len(controller.reads[-1])))
     # Reset DAC level, and disconnect channel
     chip.config.csa_testpulse_enable = [1]*32 # Disconnect
     controller.write_configuration(chip,[42,43,44,45]) # testpulse
@@ -70,8 +70,8 @@ def check_chip_status(controller, chip_idx=0, channel_ids = range(32),
     controller.run(0.2, 'clear buffer')
     # Check each channel
     for chanid in channel_ids:
-        print ''
-        print 'Checking chip - channel: %d - %d' % (chip_idx, chanid)
+        print('')
+        print('Checking chip - channel: %d - %d' % (chip_idx, chanid))
         chip.config.channel_mask[chanid] = 0 # Enable channel
         controller.write_configuration(chip, range(52,56))
         # Read to check that noise level is managable
@@ -82,8 +82,8 @@ def check_chip_status(controller, chip_idx=0, channel_ids = range(32),
         pulse_channel(controller, chip_idx=chip_idx, pulse_channel=chanid,
                       n_pulses=2, pulse_dac=pulse_dac)
         n_pulse_packets = [len(controller.reads[-2]), len(controller.reads[-1])]
-        print ' Noise packets: %d' % (n_noise_packets)
-        print ' Pulse packets: %r' % (n_pulse_packets)
+        print(' Noise packets: %d' % (n_noise_packets))
+        print(' Pulse packets: %r' % (n_pulse_packets))
         # Be sure to disable after test
         chip.config.channel_mask = [1]*32 # Disable all channels
         controller.write_configuration(chip, range(52,56))
@@ -1409,7 +1409,7 @@ def noise_test_low_threshold(board='pcb-5', chip_idx=0, run_time=1,
     if controller is None:
         close_controller = True
         controller = quickcontroller(board)
-    disable_chips(controller)
+    controller.disable()
     # Get chip under test
     chip = controller.chips[chip_idx]
     print('initial configuration for chip %d' % chip.chip_id)
@@ -1422,17 +1422,16 @@ def noise_test_low_threshold(board='pcb-5', chip_idx=0, run_time=1,
         print('test channel %d' % channel)
         print('clear buffer (slow)')
         controller.run(1,'clear buffer')
-        chip.config.enable_channels([channel])
-        controller.write_configuration(chip,range(52,56))
+        controller.enable(chip_id=chip.chip_id, io_chain=chip.io_chain,
+                          channel_list=[channel])
         print('clear buffer (quick)')
         controller.run(0.1,'clear buffer')
         controller.run(run_time,'collect data')
+        controller.disable(chip_id=chip.chip_id, io_chain=chip.io_chain)
         adc_values[channel] = [packet.dataword for packet in controller.reads[-1]
                                if packet.packet_type == packet.DATA_PACKET and
                                packet.chipid == chip.chip_id and
                                packet.channel_id == channel]
-        chip.config.disable_channels()
-        controller.write_configuration(chip,range(52,56))
         if len(adc_values[channel]) > 0:
             mean[channel] = float(sum(adc_values[channel]))/len(adc_values[channel])
             std_dev[channel] = math.sqrt(sum([float(value)**2 for value in adc_values[channel]])/len(adc_values[channel]) - mean[channel]**2)
@@ -1833,9 +1832,9 @@ def examine_fine_scan(fine_data, saturation_level=1000):
     sat_trims = []
     chan_level_too_high = []
     chan_level_too_low = []
-    print fine_data
+    print(fine_data)
     for channel_num in fine_data.keys():
-        print fine_data[0]
+        print(fine_data[0])
         trims = fine_data[channel_num]['trims']
         npackets = fine_data[channel_num]['npackes']
         #adc_widths = data['']
