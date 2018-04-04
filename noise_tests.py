@@ -89,6 +89,85 @@ def check_chip_status(controller, chip_idx=0, channel_ids = range(32),
         controller.write_configuration(chip, range(52,56))
     return
 
+def test_digital_pickup(controller=None, board='pcb-1', chip_idx=0,
+                        channel=0, run_time=0.01, threshold=32, trim_max=31, trim_min=0,
+                        trim_step=1, n_test_packets=10, n_tests=10):
+    '''
+    Scans trim levels while sending test packets.
+    '''
+    print('begin digital io threshold scan')
+    # Create controller and initialize chips to appropriate state
+    close_controller = False
+    if controller is None:
+        close_controller = True
+        controller = quickcontroller(board)
+        controller.disable()
+        controller.run(2,'clear buffer')
+        config_ok, different_registers = controller.verify_configuration()
+        if config_ok:
+            print('  new controller created')
+        else:
+            print('  configuration error')
+            print('  different registers: %s' % str(different_registers))
+    chip = controller.chips[chip_idx]
+    chip_id = chip.chip_id
+    # Save current configuration in a temporary file
+    temp_filename = '.config_%s.json' % time.strftime('%Y_%m_%d_%H_%M_%S',time.localtime())
+    print('temporarily storing previous configuration: %s' % temp_filename)
+    chip.config.write(temp_filename,force=True)
+    # Set up chips for testing
+    print('setting up chip...')
+    controller.disable(chip_id=chip_id)
+    chip.config.global_threshold = threshold
+    chip.config.pixel_trim_thresholds[channel] = trim_max
+    registers_to_write = range(33) + [52,53,54,55]
+    controller.write_configuration(chip, registers_to_write)
+    controller.enable(chip_id=chip_id, channel_list=[channel])
+    controller.run(0.1,'clear buffer')
+    results = {'trim': [],
+               'sent': [],
+               'recieved': [],
+               'ref': [],
+               'gen_frac': []}
+    # Run loop
+    for trim in range(trim_max, trim_min-trim_step, -trim_step):
+        print('chip %d channel %d trim %d' % (chip_id, channel, trim))
+        chip.config.pixel_trim_thresholds[channel] = trim
+        registers_to_write = range(33)
+        controller.write_configuration(chip, registers_to_write)
+        n_sent_packets = 0
+        n_in_window_packets = 0
+        n_out_window_packets = 0
+        controller.run(0.1,'clear buffer')
+        for test_idx in range(n_tests):    
+            controller.write_configuration(controller.all_chips[0],
+                                           range(n_test_packets),
+                                           write_read=run_time)
+            in_window_packets = controller.reads[-1]
+            controller.run(run_time,'out window read')
+            out_window_packets = controller.reads[-1]
+            n_sent_packets += n_test_packets
+            n_in_window_packets += len(in_window_packets)
+            n_out_window_packets += len(out_window_packets)
+        gen_fraction = float(n_in_window_packets - n_out_window_packets - n_sent_packets) /\
+            n_sent_packets
+        print('  sent: %d\tin window: %d\tout of window: %d\tgen fraction: %.3f' % 
+              (n_sent_packets, n_in_window_packets, n_out_window_packets, gen_fraction))
+        results['trim'] += [trim]
+        results['sent'] += [n_sent_packets]
+        results['recieved'] += [n_in_window_packets]
+        results['ref'] += [n_out_window_packets]
+        results['gen_frac'] += [gen_fraction]
+    # Return chip to original state
+    controller.disable(chip_id=chip.chip_id)
+    chip.config.load(temp_filename)
+    controller.write_configuration(chip)
+    os.remove(temp_filename)
+    if not controller.verify_configuration(chip_id=chip.chip_id)[0]:
+        print('  warning: could not verify original chip state')
+    if close_controller:
+        controller.serial_close()
+    return results
 
 def find_channel_thresholds(controller=None, board='pcb-1', chip_idx=0,
                             channel_list=range(32), output_directory='.',
