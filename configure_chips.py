@@ -389,6 +389,8 @@ try:
         io_chain = chip.io_chain
         configuration_file = outdir + '/%s_c%d-%d_config.json' % \
             (board_info, chip_id, io_chain)
+        if not os.path.isfile(configuration_file):
+            continue
         chip.config.load(configuration_file)
         controller.write_configuration(chip)
     clear_buffer(controller)
