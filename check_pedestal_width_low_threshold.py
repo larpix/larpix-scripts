@@ -140,11 +140,11 @@ try:
                              len(board_results[chip_idx][1])
         log.info('%s-c%d-%d mean width: %.2f adc, rms: %.2f adc' % \
                          (board_info, chip_id, io_chain, chip_width_mean, chip_width_rms))
-        for channel_idx,channel in enumerate(board_results[chip_idx]['channel']):
+        for channel in range(32):
             log.info('%s-c%d-%d-ch%d pedestal: %.2f adc, width: %.2f adc' % \
                          (board_info, chip_id, io_chain, channel,
-                          board_results[chip_idx][0][channel_idx],
-                          board_results[chip_idx][1][channel_idx]))
+                          board_results[chip_idx][0][channel],
+                          board_results[chip_idx][1][channel]))
 except Exception as error:
     log.exception(error)
     return_code = 1
