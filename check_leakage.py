@@ -31,6 +31,17 @@ def clear_buffer(controller):
         clear_buffer_quick(controller)
         buffer_clear_attempts -= 1
 
+def verify_chip_configuration(controller):
+    clear_buffer(controller)
+    config_ok, different_registers = controller.verify_configuration()
+    if not config_ok:
+        log.warn('chip configurations were not verified - retrying')
+        clear_buffer(controller)
+        config_ok, different_registers = controller.verify_configuration()
+        if not config_ok:
+            log.warn('chip configurations could not be verified')
+            log.warn('different registers: %s' % str(different_registers))
+
 parser = argparse.ArgumentParser()
 parser.add_argument('infile',
                     help='input file containing chipset info (required)')
@@ -49,6 +60,9 @@ parser.add_argument('--run_time', default=1, type=int,
 parser.add_argument('--configuration_file', default='physics.json',
                     help='initial chip configuration file to load '
                     '(optional, default: %(default)s)')
+parser.add_argument('--chips', default=None, type=str,
+                    help='chips to include in scan, string of chip_ids separated by commas'
+                    '(optional, default: None=all chips in chipset file)')
 args = parser.parse_args()
 
 infile = args.infile
@@ -59,6 +73,10 @@ global_threshold = args.global_threshold
 pixel_trim = args.pixel_trim
 run_time = args.run_time
 config_file = args.configuration_file
+if not args.chips is None:
+    chips_to_scan = [int(chip_id) for chip_id in args.chips.split(',')]
+else:
+    chips_to_scan = None
 
 return_code = 0
 
@@ -95,11 +113,7 @@ try:
         controller.disable(chip_id=chip_id, io_chain=io_chain)
     log.info('initial configuration of chips complete')
 
-    clear_buffer(controller)
-    config_ok, different_registers = controller.verify_configuration()
-    if not config_ok:
-        log.warn('chip configurations were not verified')
-        log.warn('different registers: %s' % str(different_registers))
+    verify_chip_configuration(controller)
 
     # Run leakage current test on each chip
     board_results = []
@@ -109,6 +123,12 @@ try:
             chip_id = chip.chip_id
             io_chain = chip.io_chain
             chip_info = (chip_id, io_chain)
+            if chips_to_scan is None:
+                pass
+            else:
+                if not chip_id in chips_to_scan:
+                    log.info('skipping c%d-%d' % chip_info)
+                    continue
 
             clear_buffer(controller)
             chip_results = noise_tests.test_leakage_current(controller=controller,
