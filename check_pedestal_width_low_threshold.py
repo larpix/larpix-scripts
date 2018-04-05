@@ -124,27 +124,27 @@ try:
 
     log.info('all chips pedestal complete')
 
-    # Print leakage test results
+    # Print pedestal scan results
     for chip_idx,chip in enumerate(controller.chips):
         chip_id = chip.chip_id
         io_chain = chip.io_chain
-        chip_ped_mean = sum(board_results[chip_idx][1]) / len(board_results[chip_idx][1])
-        chip_ped_rms = sum(abs(ped - chip_ped_mean) for ped in board_results[chip_idx][1]) /\
-            len(board_results[chip_idx][1])
+        chip_ped_mean = sum(board_results[chip_idx][0]) / len(board_results[chip_idx][0])
+        chip_ped_rms = sum(abs(ped - chip_ped_mean) for ped in board_results[chip_idx][0]) /\
+            len(board_results[chip_idx][0])
         log.info('%s-c%d-%d mean pedestal: %.2f adc, rms: %.2f adc' % \
                          (board_info, chip_id, io_chain, chip_ped_mean, chip_ped_rms))
 
-        chip_width_mean = sum(board_results[chip_idx][2]) / len(board_results[chip_idx][2])
+        chip_width_mean = sum(board_results[chip_idx][1]) / len(board_results[chip_idx][1])
         chip_width_rms = sum(abs(width - chip_width_mean)
-                             for width in board_results[chip_idx][2])/\
-                             len(board_results[chip_idx][2])
+                             for width in board_results[chip_idx][1])/\
+                             len(board_results[chip_idx][1])
         log.info('%s-c%d-%d mean width: %.2f adc, rms: %.2f adc' % \
                          (board_info, chip_id, io_chain, chip_width_mean, chip_width_rms))
         for channel_idx,channel in enumerate(board_results[chip_idx]['channel']):
             log.info('%s-c%d-%d-ch%d pedestal: %.2f adc, width: %.2f adc' % \
                          (board_info, chip_id, io_chain, channel,
-                          board_results[chip_idx][1][channel_idx],
-                          board_results[chip_idx][2][channel_idx]))
+                          board_results[chip_idx][0][channel_idx],
+                          board_results[chip_idx][1][channel_idx]))
 except Exception as error:
     log.exception(error)
     return_code = 1
