@@ -114,12 +114,18 @@ try:
     for chip_tuple in chip_set['chip_set']:
         chip_id = chip_tuple[0]
         io_chain = chip_tuple[1]
+        chip_info = (chip_id, io_chain)
         controller.chips.append(larpix.Chip(chip_id, io_chain))
         chip = controller.chips[-1]
         try:
             chip.config.load(config_file % chip_id)
         except:
-            chip.config.load(config_file)
+            try:
+                chip.config.load(config_file)
+            except:
+                log.warning('no configuration found for c%d-%d' % chip_info)
+                controller.disable(chip_id=chip_id, io_chain=io_chain)
+                continue
         controller.write_configuration(chip)
         controller.disable(chip_id=chip_id, io_chain=io_chain)
     log.info('initial configuration of chips complete')
