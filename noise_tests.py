@@ -1777,8 +1777,11 @@ def test_min_signal_amplitude(controller=None, board='pcb-1', chip_idx=0,
         controller.serial_close()
     print('summary (channel, trim, min_pulse_dac, eff):')
     for idx,channel in enumerate(results.keys()):
-        print('%d %d %d %.2f' % (channel, trim[idx], results[channel]['min_pulse_dac'],
-                                 results[channel]['eff']))
+        try:
+            print('%d %d %d %.2f' % (channel, trim[idx], results[channel]['min_pulse_dac'],
+                                     results[channel]['eff']))
+        except:
+            pass
     return results
 
 def analog_monitor(controller=None, board='pcb-5', chip_idx=0, channel=0):
