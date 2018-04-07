@@ -160,225 +160,289 @@ try:
         controller.write_configuration(chip)
         controller.disable(chip_id=chip_id, io_chain=io_chain)
     log.info('initial configuration of chips complete')
+    controller.disable()
+    clear_buffer(controller)
 
     verify_chip_configuration(controller)
 
     chip_configurations = []
-    for chip in controller.chips:
-        try:
-            start_time = time.time()
+    try:
+        start_time = time.time()
+        global_threshold = {}
+        pixel_trims = {}
+        modified_registers = range(32) + [32]
+        for chip in controller.chips:
             chip_id = chip.chip_id
-            io_chain = chip.io_chain
-            chip_info = (chip_id, io_chain)
-            if chips_to_scan is None:
-                pass
-            else:
-                if not chip_id in chips_to_scan:
-                    log.info('skipping c%d-%d' % chip_info)
-                    continue
-            global_threshold = global_threshold_max
-            chip.config.global_threshold = global_threshold
-            pixel_trims = [pixel_trim_max]*32
-            chip.config.pixel_trim_thresholds = pixel_trims
-            modified_registers = range(32) + [32]
+            global_threshold[chip_id] = global_threshold_max
+            pixel_trims[chip_id] = [pixel_trim_max]*32
+            chip.config.global_threshold = global_threshold[chip_id]
+            chip.config.pixel_trim_thresholds = pixel_trims[chip_id]
             controller.write_configuration(chip, modified_registers)
-            # Check for high rate channels
-            controller.enable(chip_id=chip_id, io_chain=io_chain)
-            high_threshold_channels = set()
-            break_flag = False
-            while not break_flag:
-                break_flag = True
-                clear_buffer(controller)
-                log.info('check rate on c%d-%d' % chip_info)
-                controller.write_configuration(chip0, range(10), write_read=run_time,
-                                               message='rate check c%d-%d' % chip_info)
-                npackets = npackets_by_channel(controller.reads[-1], chip_id)
+        # Check for high rate channels
+        high_threshold_channels = {}
+        for chip in controller.chips:
+            chip_id = chip.chip_id
+            high_threshold_channels[chip_id] = set()
+            if chips_to_scan is None:
+                controller.enable()
+            elif chip_id in chips_to_scan:
+                controller.enable(chip_id=chip_id)
+
+        break_flag = False
+        while not break_flag:
+            break_flag = True
+            clear_buffer(controller)
+            log.info('check rate on chips')
+            controller.write_configuration(chip0, range(10), write_read=run_time,
+                                           message='rate check')
+            npackets = npackets_by_chip_channel(controller.reads[-1])
+            for chip in chips:
+                chip_id = chip.chip_id
+                if sum(npackets[chip_id]) <= 0:
+                    continue
                 log.info('c%d-%d has a rate of %.2f Hz' % \
-                             (chip_id, io_chain, sum(npackets)/run_time))
-                for channel,npacket in enumerate(npackets):
+                             (chip_id, io_chain, sum(npackets[chip_id])/run_time))
+                for channel,npacket in enumerate(npackets[chip_id]):
                     if npacket >= max_rate * run_time:
                         if verbose:
                             log.info('c%d-%d-ch%d has a rate of %.2f Hz' % \
                                          (chip_id, io_chain, channel, npacket/run_time))
-                        high_threshold_channels.add(channel)
+                        high_threshold_channels[chip_id].add(channel)
                         break_flag = False
-                log.info('disable c%d-%d channels %s' % (chip_id, io_chain,
-                                                         str(high_threshold_channels)))
+                log.info('disable c%d-%d channels %s' % \
+                             (chip_id, io_chain, str(high_threshold_channels[chip_id])))
                 controller.disable(chip_id=chip_id,
                                    channel_list=list(high_threshold_channels),
                                    io_chain=io_chain)
-                clear_buffer(controller)
-            if len(high_threshold_channels):
+        for chip in controller.chips:
+            if len(high_threshold_channels[chip_id]):
                 log.info('c%d-%d channels with threshold above %d: %s' % \
                              (chip_id, io_chain, global_threshold,
-                              str(high_threshold_channels)))
-            # Perform quick global threshold scan to determine highest channel threshold
-            log.info('begin quick global threshold scan for c%d-%d' % chip_info)
-            break_flag = False
-            while global_threshold >= global_threshold_min and not break_flag:
-                clear_buffer(controller)
-                chip.config.global_threshold = global_threshold
-                modified_registers = 32
-                controller.write_configuration(chip, modified_registers)
-                clear_buffer_quick(controller)
-                controller.write_configuration(chip0, range(10), write_read=quick_run_time,
-                                               message='quick global threshold scan')
-                packets = controller.reads[-1]
-                npackets = npackets_by_channel(packets, chip_id)
+                              str(high_threshold_channels[chip_id])))
+
+        # Perform quick global threshold scan to determine highest channel threshold
+        log.info('begin quick global threshold scan' % chip_info)
+        repeat_flag = False
+        break_flag = False
+        scan_complete = {}
+        for chip in controller.chips: scan_complete[chip.chip_id] = False
+        test_threshold = global_threshold_max
+        while test_threshold >= global_threshold_min and not break_flag:
+            clear_buffer(controller)
+            modified_registers = [32]
+            for chip in controller.chips:
+                chip_id = chip.chip_id
+                if not scan_complete[chip_id]:
+                    global_threshold[chip_id] = test_threshold
+                    chip.config.global_threshold = global_threshold[chip_id]
+                    modified_registers = 32
+                    controller.write_configuration(chip, modified_registers)
+                    clear_buffer_quick(controller)
+            controller.write_configuration(chip0, range(10), write_read=quick_run_time,
+                                           message='quick global threshold scan')
+            packets = controller.reads[-1]
+            npackets = npackets_by_chip_channel(packets)
+            for chip in controller.chips:
+                chip_id = chip.chip_id
+                if sum(npackets[chip_id]) <= 0:
+                    continue
                 log.info('threshold %d - chip rate %.2f Hz' % \
-                             (global_threshold, sum(npackets)/quick_run_time))
+                             (global_threshold, sum(npackets[chip_id])/quick_run_time))
                 for channel in range(32):
-                    if npackets[channel] >= threshold_rate * quick_run_time:
+                    if npackets[chip_id][channel] >= threshold_rate * quick_run_time:
                         if verbose:
-                            log.info('c%d-%d-ch%d rate is %.2f Hz' % \
-                                         (chip_id, io_chain, channel,
-                                          npackets[channel]/quick_run_time))
-                        break_flag = True
-                if not break_flag:
-                    global_threshold -= global_threshold_step
-            if global_threshold < global_threshold_min: global_threshold = global_threshold_min
-            log.info('quick global threshold scan for c%d-%d complete: %d' % \
-                         (chip_id, io_chain, global_threshold))
-            # Perform slow global threshold scan to closely determine global threshold
-            log.info('begin fine global threshold scan for c%d-%d' % chip_info)
-            break_flag = False
-            while global_threshold <= global_threshold_max and not break_flag:
-                break_flag = True
-                clear_buffer(controller)
-                chip.config.global_threshold = global_threshold
-                modified_registers = 32
+                            log.info('c%d-ch%d rate is %.2f Hz' % \
+                                         (chip_id, channel,
+                                          npackets[chip_id][channel]/quick_run_time))
+                        scan_complete[chip_id] = True
+                        repeat_flag = True
+            break_flag = all(scan_complete.values())
+            if not break_flag:
+                if not repeat_flag:
+                    test_threshold -= global_threshold_step
+                if test_threshold < global_threshold_min:
+                    test_threshold = global_threshold_min
+        log.info('quick global threshold scan for complete')
+        if verbose:
+            for chip in controller.chips:
+                chip_id = chip.chip_id
+                log.info('c%d threshold: %d' % (chip_id, chip.config.global_threshold))
+
+        # Perform slow global threshold scan to closely determine global threshold
+        log.info('begin fine global threshold scan')
+        break_flag = False
+        while test_threshold <= global_threshold_max and not break_flag:
+            break_flag = True
+            clear_buffer(controller)
+            modified_registers = 32
+            for chip in controller.chips:
+                chip.config.global_threshold = global_threshold[chip_id]
                 controller.write_configuration(chip, modified_registers)
                 clear_buffer_quick(controller)
-                controller.write_configuration(chip0, range(10), write_read=run_time,
-                                               message='global threshold scan')
-                packets = controller.reads[-1]
-                npackets = npackets_by_channel(packets, chip_id)
-                log.info('threshold %d - chip rate %.2f Hz' % \
-                             (global_threshold, sum(npackets)/run_time))
-                for channel in range(32):
-                    if npackets[channel] > threshold_rate * run_time:
-                        if verbose:
-                            log.info('c%d-%d-ch%d rate is %.2f Hz' % \
-                                         (chip_id, io_chain, channel, npackets[channel]/run_time))
-                        break_flag = False
-                if not break_flag:
-                    global_threshold += global_threshold_step
-            log.info('fine global threshold scan for c%d-%d complete: %d' % \
-                         (chip_id, io_chain, global_threshold))
-            # Run quick pixel trim scan
-            log.info('begin quick pixel trim scan for c%d-%d' % chip_info)
-            pixel_trim = pixel_trim_max
-            disabled_channels = [] # channels that are disabled during quick pixel trim scan
-            channel_at_threshold = [channel in high_threshold_channels for channel in range(32)]
-            while pixel_trim >= pixel_trim_min:
-                clear_buffer(controller)
-                chip.config.pixel_trim_thresholds = pixel_trims
-                modified_registers = range(32)
+            controller.write_configuration(chip0, range(10), write_read=run_time,
+                                           message='global threshold scan')
+            packets = controller.reads[-1]
+            npackets = npackets_by_chip_channel(packets)
+            for chip in controller.chips:
+                chip_id = chip.chip_id
+                if any([npacket > threshold_rate * run_time
+                        for npacket in npackets[chip_id]]):
+                    global_threshold[chip_id] += global_threshold_step
+                    log.info('threshold %d - chip rate %.2f Hz' % \
+                                 (global_threshold[chip_id], sum(npackets[chip_id])/run_time))
+                    if verbose:
+                        for channel in range(32):
+                            log.info('c%d-ch%d rate is %.2f Hz' % \
+                                         (chip_id, channel,
+                                          npackets[chip_id][channel]/run_time))
+                    break_flag = False
+        log.info('fine global threshold scan complete')
+        if verbose:
+            for chip in controller.chips:
+                chip_id = chip.chip_id
+                log.info('c%d threshold: %d' % (chip_id, chip.config.global_threshold))
+
+        # Run quick pixel trim scan
+        log.info('begin quick pixel trim scan')
+        test_trim = pixel_trim_max
+        disabled_channels = {}
+        scan_complete = {}
+        for chip in controller.chips:
+            chip_id = chip.chip_id
+            disabled_channels[chip_id] = set()
+            # channels that are disabled during quick pixel trim scan
+            scan_complete[chip_id] = [False]*32
+            for channel in range(32):
+                if channel in high_threshold_channels[chip_id]:
+                    scan_complete[chip_id][channel] = True
+
+        while test_trim >= pixel_trim_min:
+            clear_buffer(controller)
+            modified_registers = range(32)
+            for chip in controller.chips:
+                chip_id = chip.chip_id
+                chip.config.pixel_trim_thresholds = pixel_trims[chip_id]
                 controller.write_configuration(chip, modified_registers)
                 clear_buffer_quick(controller)
-                controller.write_configuration(chip0, range(10), write_read=quick_run_time,
-                                               message='quick pixel trim scan')
-                packets = controller.reads[-1]
-                npackets = npackets_by_channel(packets, chip_id)
-                log.info('trim %d - chip rate %.2f Hz' % \
-                             (pixel_trim, sum(npackets)/quick_run_time))
+            controller.write_configuration(chip0, range(10), write_read=quick_run_time,
+                                           message='quick pixel trim scan')
+            packets = controller.reads[-1]
+            npackets = npackets_by_chip_channel(packets)
+            for chip in controller.chips:
+                chip_id = chip.chip_id
                 for channel in range(32):
-                    if npackets[channel] < threshold_rate * quick_run_time and \
-                            not channel_at_threshold[channel]:
-                        if pixel_trims[channel] <= pixel_trim_min:
-                            pixel_trims[channel] = pixel_trim_min
-                        else:
-                            pixel_trims[channel] -= pixel_trim_step
-                    elif npackets[channel] >= threshold_rate * quick_run_time:
-                        channel_at_threshold[channel] = True
-                        disabled_channels += [channel]
+                    if npackets[chip_id][channel] < threshold_rate * quick_run_time and \
+                            not scan_complete[chip_id][channel]:
+                        pixel_trims[chip_id][channel] = test_trim
+                    elif npackets[chip_id][channel] >= threshold_rate * quick_run_time:
+                        scan_complete[chip_id][channel] = True
+                        disabled_channels[chip_id].add(channel)
                         if verbose:
-                            log.info('c%d-%d-ch%d rate is %.2f Hz' % \
-                                         (chip_id, io_chain, channel,
-                                          npackets[channel]/quick_run_time))
-                controller.disable(chip_id=chip_id, channel_list=disabled_channels,
-                                   io_chain=io_chain)
-                # disable channels to reduce data rate
-                if all(channel_at_threshold):
-                    break
-                pixel_trim -= pixel_trim_step
-            if pixel_trim < pixel_trim_min: pixel_trim = pixel_trim_min
-            log.info('quick pixel trim scan for c%d-%d complete: %s' % \
-                         (chip_id, io_chain, str(pixel_trims)))
-            controller.enable(chip_id=chip_id, channel_list=disabled_channels)
-            # re-enable channels
-            # Perform slow pixel scan to closely determine pixel trims
-            log.info('begin fine pixel trim scan for c%d-%d' % chip_info)
-            while pixel_trim <= pixel_trim_max:
-                break_flag = True
-                clear_buffer(controller)
-                chip.config.pixel_trim_thresholds = pixel_trims
-                modified_registers = range(32)
+                            log.info('c%d-ch%d rate is %.2f Hz' % \
+                                         (chip_id, channel,
+                                          npackets[chip_id][channel]/quick_run_time))
+                        controller.disable(chip_id=chip_id,
+                                  channel_list=list(disabled_channels[chip_id]))
+            if all([complete for chip_complete in scan_complete
+                    for complete in chip_complete]):
+                break
+            test_trim -= pixel_trim_step
+        log.info('quick pixel trim scan complete')
+        for chip in controller.chips:
+            chip_id = chip.chip_id
+            if verbose:
+                log.info('c%d trims: %s' % (chip_id,
+                                            str(chip.config.pixel_trim_thresholds)))
+            controller.enable(chip_id=chip_id,
+                              channel_list=list(disabled_channels[chip_id]))
+
+        # Perform slow pixel scan to closely determine pixel trims
+        log.info('begin fine pixel trim scan')
+        while True:
+            clear_buffer(controller)
+            modified_registers = range(32)
+            for chip in controller.chips:
+                chip_id = chip.chip_id
+                chip.config.pixel_trim_thresholds = pixel_trims[chip_id]
                 controller.write_configuration(chip, modified_registers)
                 clear_buffer_quick(controller)
-                controller.write_configuration(chip0, range(10), write_read=run_time,
-                                               message='pixel trim scan')
-                packets = controller.reads[-1]
-                npackets = npackets_by_channel(packets, chip_id)
-                log.info('trim %d - chip rate %.2f Hz' % \
-                             (pixel_trim, sum(npackets)/run_time))
-                for channel in range(32):
-                    if npackets[channel] > threshold_rate * run_time:
-                        if verbose:
-                            log.info('c%d-%d-ch%d rate is %.2f Hz' % \
-                                         (chip_id, io_chain, channel, npackets[channel]/run_time))
-                        if pixel_trims[channel] >= pixel_trim_max:
-                            pixel_trims[channel] = pixel_trim_max
-                        else:
+            controller.write_configuration(chip0, range(10), write_read=run_time,
+                                           message='pixel trim scan')
+            packets = controller.reads[-1]
+            npackets = npackets_by_chip_channel(packets)
+            for chip in controller.chips:
+                if any([npacket > threshold_rate * run_time
+                        for npacket in npackets[chip_id]]):
+                    for channel, npacket in enumerate(npackets[chip_id]):
+                        if npacket > threshold_rate * run_time:
+                            if verbose:
+                                log.info('c%d-ch%d rate is %.2f Hz' % \
+                                             (chip_id, channel,
+                                              npacket/run_time))
                             pixel_trims[channel] += pixel_trim_step
-                if all([n <= threshold_rate * run_time for n in npackets]):
-                    break
-                pixel_trim += pixel_trim_step
-            log.info('fine pixel trim scan for c%d-%d complete: %s' % \
-                         (chip_id, io_chain, pixel_trims))
-            # Check one last time for high rate channels
+                            if pixel_trims[channel] > pixel_trim_max:
+                                pixel_trims[channel] = pixel_trim_max
+            if all([npacket <= threshold_rate * run_time
+                    for chip_npackets in npackets[chip_id] for npacket in chip_npackets]):
+                break
+            elif all([trim == pixel_trim_max for chip_trims in pixel_trims
+                      for trim in chip_trims]):
+                break
+        log.info('fine trim scan complete')
+        if verbose:
+            for chip in controller.chips:
+                chip_id = chip.chip_id
+                log.info('c%d trims: %s' % (chip_id,
+                                            str(chip.config.pixel_trim_thresholds)))
+
+        # Check one last time for high rate channels
+        high_rate_channels = {}
+        for chip in controller.chips: high_rate_channels[chip_id] = set()
+        while True:
             log.info('checking rate with configuration')
             clear_buffer(controller)
             controller.write_configuration(chip0, range(10), write_read=run_time,
                                            message='rate check')
-            npackets = npackets_by_channel(controller.reads[-1], chip_id)
-            log.info('c%d-%d rate is %.2f Hz' % \
-                             (chip_id, io_chain, sum(npackets)/run_time))
-            high_rate_channels = []
-            for channel in range(32):
-                if verbose:
-                    log.info('c%d-%d-ch%d rate is %.2f Hz' % \
-                                 (chip_id, io_chain, channel, npackets[channel]/run_time))
-                if npackets[channel] > max_rate * run_time:
-                    high_rate_channels += [channel]
-            if len(high_rate_channels) > 0:
-                log.warn('rates too high on channel %s, disabling' % \
-                            (high_rate_channels))
-            controller.disable(chip_id=chip_id, channel_list=high_rate_channels,
-                               io_chain=io_chain)
-            # Save chip configuration
+            npackets = npackets_by_chip_channel(controller.reads[-1])
+            for chip in controller.chips:
+                chip_id = chip.chip_id
+                log.info('c%d-%d rate is %.2f Hz' % \
+                             (chip_id, sum(npackets[chip_id])/run_time))
+                if any([npacket > max_rate * run_time for npacket in npackets[chip_id]]):
+                    for channel in range(32):
+                        if npackets[chip_id][channel] > max_rate * run_time:
+                            high_rate_channels[chip_id].add(channel)
+                    if len(high_rate_channels[chip_id]) > 0:
+                        log.warn('rates too high on c%d channels %s, disabling' % \
+                                     (chip_id, str(high_rate_channels)))
+                        controller.disable(chip_id=chip_id, channel_list=list(high_rate_channels))
+            if all([npacket <= max_rate * run_time for chip_npackets in npackets
+                    for npacket in chip_npackets]):
+                break
+
+        # Save chip configuration
+        for chip in controller.chips:
+            chip_id = chip.chip_id
             config = larpix.Configuration()
             config.from_dict(chip.config.to_dict())
             if verbose:
+                log.debug('configuration for c%d' % chip_id)
                 log.debug(str(config))
             chip_configurations += [config]
-            configuration_file = outdir + '/%s_c%d-%d_config.json' % \
-                (board_info, chip_id, io_chain)
+            configuration_file = outdir + '/%s_c%d_config.json' % \
+                (board_info, chip_id)
             config.write(configuration_file, force=True)
             log.info('configuration saved to %s' % configuration_file)
-            # Disable chip for rest of loop
-            controller.disable(chip_id=chip_id, io_chain=io_chain)
-            log.info('c%d-%d configuration complete' % chip_info)
-            finish_time = time.time()
-            if verbose:
-                log.debug('c%d-%d configuration took %.2f s' % \
+        finish_time = time.time()
+        if verbose:
+            log.debug('configuration took %.2f s' % \
                               (chip_id, io_chain, finish_time - start_time))
-        except Exception as error:
-            log.exception(error)
-            log.error('c%d-%d configuration failed!' % chip_info)
-            controller.disable(chip_id=chip_id, io_chain=io_chain)
-            return_code = 2
-            continue
+    except Exception as error:
+        log.exception(error)
+        log.error('configuration failed!' % chip_info)
+        controller.disable(chip_id=chip_id, io_chain=io_chain)
+        return_code = 2
+        continue
 
     log.info('all chips configuration complete')
 
@@ -386,9 +450,8 @@ try:
     log.info('board rate check')
     for chip in controller.chips:
         chip_id = chip.chip_id
-        io_chain = chip.io_chain
-        configuration_file = outdir + '/%s_c%d-%d_config.json' % \
-            (board_info, chip_id, io_chain)
+        configuration_file = outdir + '/%s_c%d_config.json' % \
+            (board_info, chip_id)
         if not os.path.isfile(configuration_file):
             continue
         chip.config.load(configuration_file)
@@ -400,17 +463,16 @@ try:
     npackets = npackets_by_chip_channel(controller.reads[-1])
     for chip in controller.chips:
         chip_id = chip.chip_id
-        io_chain = chip.io_chain
         if chip_id in npackets.keys():
-            log.info('%s-c%d-%d rate: %.2f Hz' % \
-                         (board_info, chip_id, io_chain, sum(npackets[chip_id])/run_time))
+            log.info('%s-c%d rate: %.2f Hz' % \
+                         (board_info, chip_id, sum(npackets[chip_id])/run_time))
             for channel in range(32):
-                log.info('%s-c%d-%d-ch%d rate: %.2f Hz' % \
-                             (board_info, chip_id, io_chain, channel,
+                log.info('%s-c%d-ch%d rate: %.2f Hz' % \
+                             (board_info, chip_id, channel,
                               npackets[chip_id][channel]/run_time))
         else:
-            log.warn('%s-c%d-%d no packets received' % \
-                         (board_info, chip_id, io_chain))
+            log.warn('%s-c%d no packets received' % \
+                         (board_info, chip_id))
 except Exception as error:
     log.exception(error)
     return_code = 1
