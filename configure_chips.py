@@ -364,6 +364,15 @@ try:
             config.from_dict(chip.config.to_dict())
             if verbose:
                 log.debug(str(config))
+                num_31s = 0
+                num_0s = 0
+                for thresh in config.pixel_trim_thresholds:
+                    if thresh == 0:
+                        num_0s += 1
+                    elif thresh == 31:
+                        num_31s += 1
+                log.debug('num 0s: %d, num 31s: %d, FoM: %.2f', num_0s,
+                        num_31s, num_31s + 0.5*num_0s)
             chip_configurations += [config]
             configuration_file = outdir + '/%s_c%d-%d_config.json' % \
                 (board_info, chip_id, io_chain)
