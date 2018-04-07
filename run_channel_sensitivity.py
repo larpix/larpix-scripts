@@ -19,7 +19,7 @@ global_threshold_correction = args.threshold_correction
 
 
 for chip in board_info_map['pcb-10']['chip_list']:
-    if (not args.chip) or chip in args.chip:
+    if (not args.chip) or chip[0] in args.chip:
         command = ('python check_channel_sensitivity.py pcb-10_chip_info.json '
                    'datalog/channel_sensitivty_%s '
                    '--global_threshold_correction %d '
