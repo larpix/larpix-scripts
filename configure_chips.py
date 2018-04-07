@@ -60,7 +60,7 @@ def verify_chip_configuration(controller):
 parser = argparse.ArgumentParser()
 parser.add_argument('infile',
                     help='input file containing chipset info (required)')
-parser.add_argument('outdir', nargs='?', default='.',
+parser.add_argument('outdir', nargs='?', default=None,
                     help='output directory for log and config files '
                     '(optional, default: %(default)s)')
 parser.add_argument('-v', '--verbose', action='store_true')
@@ -108,6 +108,9 @@ args = parser.parse_args()
 
 infile = args.infile
 outdir = args.outdir
+if outdir is None:
+    specifier = time.strftime('%Y_%m_%d_%H_%M')
+    outdir = 'datalog/configure_chips_%s' % specifier
 verbose = args.verbose
 global_threshold_max = args.global_threshold_max
 global_threshold_min = args.global_threshold_min
