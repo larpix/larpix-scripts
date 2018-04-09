@@ -93,7 +93,7 @@ elif args.format.lower() == 'root':
     ttree.Branch('pdst_v', root_pdst_v, 'pdst_v/D')
 
 #geometry = PixelPlane.fromDict(layouts.load('sensor_plane_28_simple.yaml'))
-geometry = PixelPlane.fromDict(layouts.load(args.geometry))
+geometry = PixelPlane.fromDict(layouts.load(geom_choices[args.geometry]))
 
 numpy_arrays = []
 index_limit = 10000
