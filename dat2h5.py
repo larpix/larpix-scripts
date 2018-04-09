@@ -39,6 +39,12 @@ parser.add_argument('-c', '--calibration', default=None)
 parser.add_argument('-v', '--verbose', action='store_true')
 parser.add_argument('--format', choices=['h5', 'root', 'ROOT'],
         required=True)
+geom_choices = {'4chip': 'sensor_plane_28_simple.yaml',
+        '8chip': 'sensor_plane_28_8chip.yaml',
+        '28chip': 'sensor_plane_28_full.yaml'}
+}
+parser.add_argument('-g', '--geometry', choices=geom_choices.keys(),
+        required=True, help='The sensor & chip geometry layout')
 args = parser.parse_args()
 
 infile = args.infile
@@ -87,7 +93,7 @@ elif args.format.lower() == 'root':
     ttree.Branch('pdst_v', root_pdst_v, 'pdst_v/D')
 
 #geometry = PixelPlane.fromDict(layouts.load('sensor_plane_28_simple.yaml'))
-geometry = PixelPlane.fromDict(layouts.load('sensor_plane_28_8chip.yaml'))
+geometry = PixelPlane.fromDict(layouts.load(args.geometry))
 
 numpy_arrays = []
 index_limit = 10000
