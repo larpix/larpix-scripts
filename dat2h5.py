@@ -42,7 +42,6 @@ parser.add_argument('--format', choices=['h5', 'root', 'ROOT'],
 geom_choices = {'4chip': 'sensor_plane_28_simple.yaml',
         '8chip': 'sensor_plane_28_8chip.yaml',
         '28chip': 'sensor_plane_28_full.yaml'}
-}
 parser.add_argument('-g', '--geometry', choices=geom_choices.keys(),
         required=True, help='The sensor & chip geometry layout')
 args = parser.parse_args()
@@ -119,10 +118,18 @@ while True:
 
                 chipid = packet.chipid
                 channel = packet.channel_id
-                pixel = geometry.chips[chipid].channel_connections[channel]
-                current_array[current_index][2] = pixel.pixelid
-                current_array[current_index][3] = int(10*pixel.x)
-                current_array[current_index][4] = int(10*pixel.y)
+                try:
+                    pixel = geometry.chips[chipid].channel_connections[channel]
+                except KeyError:
+                    pixel = geometry.unconnected_pixel
+                if pixel.pixelid is None:
+                    current_array[current_index][2] = -1
+                    current_array[current_index][3] = -1
+                    current_array[current_index][4] = -1
+                else:
+                    current_array[current_index][2] = pixel.pixelid
+                    current_array[current_index][3] = int(10*pixel.x)
+                    current_array[current_index][4] = int(10*pixel.y)
 
                 try:
                     current_array[current_index][10] = 1e3*((packet.dataword) * \
