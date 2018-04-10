@@ -177,15 +177,15 @@ try:
     for chip_idx,chip in enumerate(controller.chips):
         chip_id = chip.chip_id
         io_chain = chip.io_chain
-        for channel_idx,channel in enumerate(board_results[chip_idx]['channel']):
-            try:
-                log.info('%s-c%d-%d-ch%d min dac: %d dac, efficiency: %.2f' % \
-                             (board_info, chip_id, io_chain, channel,
-                              board_results[chip_idx][channel]['min_pulse_dac'],
-                              board_results[chip_idx][channel]['eff']))
-            except:
-                pass
-    
+        if board_results[chip_idx] is None:
+            log.info('%s-c%d-%d skipped' % (board_info, chip_id, io_chain))
+            continue
+        for channel in sorted(board_results[chip_idx].keys()):
+            log.info('%s-c%d-%d-ch%d min dac: %d dac, efficiency: %.2f' % \
+                         (board_info, chip_id, io_chain, channel,
+                          board_results[chip_idx][channel]['min_pulse_dac'],
+                          board_results[chip_idx][channel]['eff']))
+
 except Exception as error:
     log.exception(error)
     return_code = 1
