@@ -13,6 +13,7 @@ Requires a .json file containing chip-ids and daisy chain data formatted like
 from __future__ import print_function
 import argparse
 import logging
+from helpers.logging import ScriptLogger
 import time
 import larpix.larpix as larpix
 from sys import (exit, stdout)
@@ -108,9 +109,6 @@ args = parser.parse_args()
 
 infile = args.infile
 outdir = args.outdir
-if outdir is None:
-    specifier = time.strftime('%Y_%m_%d_%H_%M')
-    outdir = 'datalog/configure_chips_%s' % specifier
 verbose = args.verbose
 global_threshold_max = args.global_threshold_max
 global_threshold_min = args.global_threshold_min
@@ -130,24 +128,12 @@ else:
 
 return_code = 0
 
-if not os.path.exists(outdir):
-    os.makedirs(outdir)
-logfile = outdir + '/.configure_chips_%s.log' % \
-    str(time.strftime('%Y_%m_%d_%H_%M_%S',time.localtime()))
-log = logging.getLogger(__name__)
-fhandler = logging.FileHandler(logfile)
-shandler = logging.StreamHandler(stdout)
-formatter = logging.Formatter('%(asctime)s %(levelname)s: %(message)s')
-fhandler.setFormatter(formatter)
-shandler.setFormatter(formatter)
-log.addHandler(fhandler)
-log.addHandler(shandler)
-log.setLevel(logging.DEBUG)
-log.info('start of new run')
-log.info('logging to %s' % logfile)
+sl = ScriptLogger('configure_chips')
+log = sl.script_log
+if outdir is None:
+    outdir = sl.script_logdir
 
 try:
-    larpix.enable_logger()
     controller = larpix.Controller(timeout=0.01)
     chip0 = controller.all_chips[0]
     # Initial configuration of chips
