@@ -14,6 +14,7 @@ Requires a .json file containing chip-ids and daisy chain data formatted like
 from __future__ import print_function
 import argparse
 import logging
+from helpers.logging import ScriptLogger
 import time
 import larpix.larpix as larpix
 import helpers.noise_tests as noise_tests
@@ -88,21 +89,10 @@ else:
 
 return_code = 0
 
-if not os.path.exists(outdir):
-    os.makedirs(outdir)
-logfile = outdir + '/.check_channel_sensitivity_%s.log' % \
-    str(time.strftime('%Y_%m_%d_%H_%M_%S',time.localtime()))
-log = logging.getLogger(__name__)
-fhandler = logging.FileHandler(logfile)
-shandler = logging.StreamHandler(stdout)
-formatter = logging.Formatter('%(asctime)s %(levelname)s: %(message)s')
-fhandler.setFormatter(formatter)
-shandler.setFormatter(formatter)
-log.addHandler(fhandler)
-log.addHandler(shandler)
-log.setLevel(logging.DEBUG)
-log.info('start of new run')
-log.info('logging to %s' % logfile)
+sl = ScriptLogger('check_channel_sensitivity')
+log = sl.script_log
+if outdir is None:
+    outdir = sl.script_logdir
 
 try:
     larpix.enable_logger()
