@@ -36,19 +36,19 @@ class ScriptLogger(class):
     script_logging_format = '%(asctime)s %(levelname)s: %(message)s')
     script_log_level = logging.DEBUG
 
-    def __init__(script_name, script_logfile=None, data_logfile=None):
+    def __init__(self, script_name, script_logfile=None, data_logfile=None):
         self.start_time = time.time()
         if script_logfile is None:
             self.script_logdir = self.default_script_logdir(script_name, \
                                                            self.start_time)
-            self.script_logfile = script_logdir + self.default_script_logfile(\
-            script_name, self.start_time)
+            self.script_logfile = script_logdir + \
+                self.default_script_logfile(script_name, self.start_time)
         if data_logfile is None:
             self.data_logdir = self.default_data_logdir(self.start_time)
-            self.data_logfile = data_logdir + self.default_data_logfile(\
-            self.start_time)
+            self.data_logfile = data_logdir + \
+                self.default_data_logfile(self.start_time)
 
-        self.init_script_logging()
+        self.init_script_logging(self.script_name)
         self.script_log.setLevel(self.script_log_level)
         self.script_log.info('initialized script logger')
         self.script_log.info('logging to %s' % self.script_logfile)
@@ -57,36 +57,41 @@ class ScriptLogger(class):
         self.script_log.info('initialized data logger')
         self.script_log.info('storing data to %s' % self.data_logfile)
 
-    def init_script_logging():
-        self.script_log = logging.getLogger(__name__)
+    def init_script_logging(self):
+        self.script_log = logging.getLogger(self.script_name)
         self.script_log_fhandler = logging.FileHandler(self.script_logfile)
         self.script_log_shandler = logging.StreamHandler(sys.stdout)
-        self.script_log_formatter = logging.Formatter(\
-        self.script_logging_format)
+        self.script_log_formatter = \
+            logging.Formatter(self.script_logging_format)
         self.log.addHandler(self.script_log_fhandler)
         self.log.addHandler(self.script_log_shandler)
 
     def init_data_logging():
         self.enable_datalog()
 
+    @classmethod
     def default_datadir(start_time):
         datadir = 'data/' + time.strftime('%Y_%m_%d', start_time) + '/'
         return datadir
 
+    @classmethod
     def default_script_logdir(script_name, start_time):
         logdir = self.default_datadir(start_time) + script_name + '_' + \
             time.strftime('%Y_%m_%d_%H_%M_%S', start_time) + '/'
         return logdir
 
+    @classmethod
     def default_script_logfile(script_name, start_time):
         logfile = script_name + '_' + \
             time.strftime('%Y_%m_%d_%H_%M_%S', start_time) + '.log'
         return
 
+    @classmethod
     def default_data_logdir(start_time):
         logdir = self.default_datadir(start_time) + 'datalog/'
         return logdir
 
+    @classmethod
     def default_data_logfile(start_time):
         logfile = 'datalog_' + time.strftime('%Y_%m_%d_%H_%M_%S_%Z') + '.dat'
         return logfile

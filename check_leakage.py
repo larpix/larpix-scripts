@@ -15,33 +15,13 @@ from __future__ import print_function
 import argparse
 import logging
 from helpers.logging import ScriptLogger
+import helpers.larpix_scripting as larpix_scripting
 import time
 import larpix.larpix as larpix
 import helpers.noise_tests as noise_tests
 from sys import (exit, stdout)
 import json
 import os
-
-def clear_buffer_quick(controller):
-    controller.run(0.05,'clear buffer (quick)')
-
-def clear_buffer(controller):
-    buffer_clear_attempts = 5
-    clear_buffer_quick(controller)
-    while len(controller.reads[-1]) > 0 and buffer_clear_attempts > 0:
-        clear_buffer_quick(controller)
-        buffer_clear_attempts -= 1
-
-def verify_chip_configuration(controller):
-    clear_buffer(controller)
-    config_ok, different_registers = controller.verify_configuration()
-    if not config_ok:
-        log.warn('chip configurations were not verified - retrying')
-        clear_buffer(controller)
-        config_ok, different_registers = controller.verify_configuration()
-        if not config_ok:
-            log.warn('chip configurations could not be verified')
-            log.warn('different registers: %s' % str(different_registers))
 
 parser = argparse.ArgumentParser()
 parser.add_argument('infile',
@@ -89,20 +69,12 @@ if outdir is None:
 try:
     controller = larpix.Controller(timeout=0.01)
     # Initial configuration of chips
-    chip_set = json.load(open(infile,'r'))
-    board_info = chip_set['board']
+    board_info = larpix_scripting.load_board(controller, infile)
     log.info('begin initial configuration of chips for board %s' % board_info)
-    for chip_tuple in chip_set['chip_set']:
-        chip_id = chip_tuple[0]
-        io_chain = chip_tuple[1]
-        controller.chips.append(larpix.Chip(chip_id, io_chain))
-        chip = controller.chips[-1]
-        chip.config.load(config_file)
-        controller.write_configuration(chip)
-        controller.disable(chip_id=chip_id, io_chain=io_chain)
-    log.info('initial configuration of chips complete')
-
-    verify_chip_configuration(controller)
+    config_ok, different_registers = larpix_scripting.load_chip_configurations(
+        controller, board_info, config_file, silence=True)
+    if config_ok:
+        log.info('initial configuration of chips complete')
 
     # Run leakage current test on each chip
     board_results = []
@@ -111,12 +83,12 @@ try:
             start_time = time.time()
             chip_id = chip.chip_id
             io_chain = chip.io_chain
-            chip_info = (chip_id, io_chain)
+            chip_info = (io_chain, chip_id)
             if chips_to_scan is None:
                 pass
             else:
                 if not chip_id in chips_to_scan:
-                    log.info('skipping c%d-%d' % chip_info)
+                    log.info('skipping %d-c%d' % chip_info)
                     board_results += [None]
                     continue
 
@@ -130,11 +102,11 @@ try:
             board_results += [chip_results]
             finish_time = time.time()
             if verbose:
-                log.debug('c%d-%d leakage test took %.2f s' % \
-                              (chip_id, io_chain, finish_time - start_time))
+                log.debug('%d-c%d leakage test took %.2f s' % \
+                              (io_chain, chip_id, finish_time - start_time))
         except Exception as error:
             log.exception(error)
-            log.error('c%d-%d leakage test failed!' % chip_info)
+            log.error('%d-c%d leakage test failed!' % chip_info)
             controller.disable(chip_id=chip_id, io_chain=io_chain)
             return_code = 2
             continue
@@ -148,17 +120,17 @@ try:
         chip_id = chip.chip_id
         io_chain = chip.io_chain
         if board_results[chip_idx] is None:
-            log.('%s-c%d-%d skipped' % (board_info, chip_id, io_chain))
+            log.('%s-%d-c%d skipped' % (board_info, io_chain, chip_id))
             continue
         chip_mean = sum(board_results[chip_idx]['rate']) /\
             len(board_results[chip_idx]['rate'])
         chip_rms = sum(abs(rate - chip_mean) for rate in board_results[chip_idx]['rate'])\
             /len(board_results[chip_idx]['rate'])
-        log.info('%s-c%d-%d mean leakage rate: %.2f Hz, rms: %.2f Hz' % \
-                     (board_info, chip_id, io_chain, chip_mean, chip_rms))
+        log.info('%s-%d-c%d mean leakage rate: %.2f Hz, rms: %.2f Hz' % \
+                     (board_info, io_chain, chip_id, chip_mean, chip_rms))
         for channel_idx,channel in enumerate(board_results[chip_idx]['channel']):
-            log.info('%s-c%d-%d-ch%d rate: %.2f Hz' % \
-                         (board_info, chip_id, io_chain, channel,
+            log.info('%s-%d-c%d-ch%d rate: %.2f Hz' % \
+                         (board_info, io_chain, chip_id, channel,
                           board_results[chip_idx]['rate'][channel_idx]))
 except Exception as error:
     log.exception(error)

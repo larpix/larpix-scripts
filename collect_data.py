@@ -1,12 +1,17 @@
 import time
 import sys
+import larpix.larpix as larpix
+import helpers.larpix_scripting as larpix_scripting
 from larpix.quickstart import *
 from helpers.logging import ScriptLogger
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--config', required=True,
-                    help='The configuration to load on the chips (with %d '
-                    'placeholder for chip_id')
+parser.add_argument('--board', default='pcb-10_chip_info.json',
+                    help='Path to chip set info file')
+parser.add_argument('--config', required=False,
+                    default=larpix_scripting.default_config(),
+                    help='The configuration to load on the chips (use dir if '
+                    'wanting to load multiple configs)')
 parser.add_argument('--subruns', default=1, required=False, type=int
                     help='The number of data collection times (default: '
                     '%(default)s)')
@@ -25,9 +30,11 @@ if outdir is None:
     outdir = sl.script_logdir
 
 try:
-    c=qc('pcb-10')
-    c.disable()
-    load_configurations(c, args.config)
+    controller = larpix.Controller(timeout=0.01)
+    board_info = larpix_scripting.load_board(controller, args.board)
+    controller.disable()
+    config_ok, different_registers = larpix_scripting.load_chip_configurations(
+        controller, board_info, args.config)
 
     if not args.global_threshold_correction == 0:
         for chip in c.chips:

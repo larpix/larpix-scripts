@@ -15,33 +15,13 @@ from __future__ import print_function
 import argparse
 import logging
 from helpers.logging import ScriptLogger
+import helpers.larpix_scripting as larpix_scripting
 import time
 import larpix.larpix as larpix
 import helpers.noise_tests as noise_tests
 from sys import (exit, stdout)
 import json
 import os
-
-def clear_buffer_quick(controller):
-    controller.run(0.05,'clear buffer (quick)')
-
-def clear_buffer(controller):
-    buffer_clear_attempts = 5
-    clear_buffer_quick(controller)
-    while len(controller.reads[-1]) > 0 and buffer_clear_attempts > 0:
-        clear_buffer_quick(controller)
-        buffer_clear_attempts -= 1
-
-def verify_chip_configuration(controller):
-    clear_buffer(controller)
-    config_ok, different_registers = controller.verify_configuration()
-    if not config_ok:
-        log.warn('chip configurations were not verified - retrying')
-        clear_buffer(controller)
-        config_ok, different_registers = controller.verify_configuration()
-        if not config_ok:
-            log.warn('chip configurations could not be verified')
-            log.warn('different registers: %s' % str(different_registers))
 
 parser = argparse.ArgumentParser()
 parser.add_argument('infile',
@@ -97,29 +77,12 @@ if outdir is None:
 try:
     controller = larpix.Controller(timeout=0.01)
     # Initial configuration of chips
-    chip_set = json.load(open(infile,'r'))
-    board_info = chip_set['board']
+    board_info = larpix_scripting.load_board(controller, infile)
     log.info('begin initial configuration of chips for board %s' % board_info)
-    for chip_tuple in chip_set['chip_set']:
-        chip_id = chip_tuple[0]
-        io_chain = chip_tuple[1]
-        chip_info = (chip_id, io_chain)
-        controller.chips.append(larpix.Chip(chip_id, io_chain))
-        chip = controller.chips[-1]
-        try:
-            chip.config.load(config_file % chip_id)
-        except:
-            try:
-                chip.config.load(config_file)
-            except:
-                log.warning('no configuration found for c%d-%d' % chip_info)
-                controller.disable(chip_id=chip_id, io_chain=io_chain)
-                continue
-        controller.write_configuration(chip)
-        controller.disable(chip_id=chip_id, io_chain=io_chain)
-    log.info('initial configuration of chips complete')
-
-    verify_chip_configuration(controller)
+    config_ok, different_registers = larpix_scripting.load_chip_configurations(
+        controller, board_info, config_file, silence=True)
+    if config_ok:
+        log.info('initial configuration of chips complete')
 
     # Run sensitivity test on each chip
     board_results = []
@@ -128,12 +91,12 @@ try:
             start_time = time.time()
             chip_id = chip.chip_id
             io_chain = chip.io_chain
-            chip_info = (chip_id, io_chain)
+            chip_info = (io_chain, chip_id)
             if chips_to_scan is None:
                 pass
             else:
                 if not chip_id in chips_to_scan:
-                    log.info('skipping c%d-%d' % chip_info)
+                    log.info('skipping %d-c%d' % chip_info)
                     board_results += [None]
                     continue
 
@@ -151,11 +114,11 @@ try:
             board_results += [chip_results]
             finish_time = time.time()
             if verbose:
-                log.debug('c%d-%d sensitivity test took %.2f s' % \
-                              (chip_id, io_chain, finish_time - start_time))
+                log.debug('%d-c%d sensitivity test took %.2f s' % \
+                              (io_chain, chip_id, finish_time - start_time))
         except Exception as error:
             log.exception(error)
-            log.error('c%d-%d sensitivity test failed!' % chip_info)
+            log.error('%d-c%d sensitivity test failed!' % chip_info)
             controller.disable(chip_id=chip_id, io_chain=io_chain)
             return_code = 2
             continue
@@ -167,11 +130,11 @@ try:
         chip_id = chip.chip_id
         io_chain = chip.io_chain
         if board_results[chip_idx] is None:
-            log.info('%s-c%d-%d skipped' % (board_info, chip_id, io_chain))
+            log.info('%s-%d-c%d skipped' % (board_info, io_chain, chip_id))
             continue
         for channel in sorted(board_results[chip_idx].keys()):
-            log.info('%s-c%d-%d-ch%d min dac: %d dac, efficiency: %.2f' % \
-                         (board_info, chip_id, io_chain, channel,
+            log.info('%s-%d-c%d-ch%d min dac: %d dac, efficiency: %.2f' % \
+                         (board_info, io_chain, chip_id, channel,
                           board_results[chip_idx][channel]['min_pulse_dac'],
                           board_results[chip_idx][channel]['eff']))
 

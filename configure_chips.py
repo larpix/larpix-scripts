@@ -14,49 +14,12 @@ from __future__ import print_function
 import argparse
 import logging
 from helpers.logging import ScriptLogger
+import helpers.larpix_scripting as larpix_scripting
 import time
 import larpix.larpix as larpix
 from sys import (exit, stdout)
 import json
 import os
-
-def npackets_by_channel(packets, chip_id):
-    npackets = [0]*32
-    for packet in packets:
-        if packet.chipid == chip_id:
-            npackets[packet.channel_id] += 1
-    return npackets
-
-def npackets_by_chip_channel(packets):
-    npackets = {}
-    for packet in packets:
-        try:
-            npackets[packet.chipid][packet.channel_id] += 1
-        except KeyError:
-            npackets[packet.chipid] = [0]*32
-            npackets[packet.chipid][packet.channel_id] += 1
-    return npackets
-
-def clear_buffer_quick(controller):
-    controller.run(0.05,'clear buffer (quick)')
-
-def clear_buffer(controller):
-    buffer_clear_attempts = 5
-    clear_buffer_quick(controller)
-    while len(controller.reads[-1]) > 0 and buffer_clear_attempts > 0:
-        clear_buffer_quick(controller)
-        buffer_clear_attempts -= 1
-
-def verify_chip_configuration(controller):
-    clear_buffer(controller)
-    config_ok, different_registers = controller.verify_configuration()
-    if not config_ok:
-        log.warn('chip configurations were not verified - retrying')
-        clear_buffer(controller)
-        config_ok, different_registers = controller.verify_configuration()
-        if not config_ok:
-            log.warn('chip configurations could not be verified')
-            log.warn('different registers: %s' % str(different_registers))
 
 parser = argparse.ArgumentParser()
 parser.add_argument('infile',
@@ -137,20 +100,12 @@ try:
     controller = larpix.Controller(timeout=0.01)
     chip0 = controller.all_chips[0]
     # Initial configuration of chips
-    chip_set = json.load(open(infile,'r'))
-    board_info = chip_set['board']
+    board_info = larpix_scripting.load_board(controller, infile)
     log.info('begin initial configuration of chips for board %s' % board_info)
-    for chip_tuple in chip_set['chip_set']:
-        chip_id = chip_tuple[0]
-        io_chain = chip_tuple[1]
-        controller.chips.append(larpix.Chip(chip_id, io_chain))
-        chip = controller.chips[-1]
-        chip.config.load(config_file)
-        controller.write_configuration(chip)
-        controller.disable(chip_id=chip_id, io_chain=io_chain)
-    log.info('initial configuration of chips complete')
-
-    verify_chip_configuration(controller)
+    config_ok, different_registers = larpix_scripting.load_chip_configurations(
+        controller, board_info, config_file, silence=True)
+    if config_ok:
+        log.info('initial configuration of chips successful')
 
     chip_configurations = []
     for chip in controller.chips:
@@ -158,12 +113,12 @@ try:
             start_time = time.time()
             chip_id = chip.chip_id
             io_chain = chip.io_chain
-            chip_info = (chip_id, io_chain)
+            chip_info = (io_chain, chip_id)
             if chips_to_scan is None:
                 pass
             else:
                 if not chip_id in chips_to_scan:
-                    log.info('skipping c%d-%d' % chip_info)
+                    log.info('skipping %d-c%d' % chip_info)
                     continue
             global_threshold = global_threshold_max
             chip.config.global_threshold = global_threshold
@@ -178,31 +133,31 @@ try:
             while not break_flag:
                 break_flag = True
                 clear_buffer(controller)
-                log.info('check rate on c%d-%d' % chip_info)
+                log.info('check rate on %d-c%d' % chip_info)
                 controller.write_configuration(chip0, range(10), write_read=run_time,
-                                               message='rate check c%d-%d' % chip_info)
+                                               message='rate check %d-c%d' % chip_info)
                 npackets = npackets_by_channel(controller.reads[-1], chip_id)
-                log.info('c%d-%d has a rate of %.2f Hz' % \
-                             (chip_id, io_chain, sum(npackets)/run_time))
+                log.info('%d-c%d has a rate of %.2f Hz' % \
+                             (io_chain, chip_id, sum(npackets)/run_time))
                 for channel,npacket in enumerate(npackets):
                     if npacket >= max_rate * run_time:
                         if verbose:
-                            log.info('c%d-%d-ch%d has a rate of %.2f Hz' % \
-                                         (chip_id, io_chain, channel, npacket/run_time))
+                            log.info('%d-c%d-ch%d has a rate of %.2f Hz' % \
+                                         (io_chain, chip_id, channel, npacket/run_time))
                         high_threshold_channels.add(channel)
                         break_flag = False
-                log.info('disable c%d-%d channels %s' % (chip_id, io_chain,
+                log.info('disable %d-c%d channels %s' % (io_chain, chip_id,
                                                          str(high_threshold_channels)))
                 controller.disable(chip_id=chip_id,
                                    channel_list=list(high_threshold_channels),
                                    io_chain=io_chain)
                 clear_buffer(controller)
             if len(high_threshold_channels):
-                log.info('c%d-%d channels with threshold above %d: %s' % \
-                             (chip_id, io_chain, global_threshold,
+                log.info('%d-c%d channels with threshold above %d: %s' % \
+                             (io_chain, chip_id, global_threshold,
                               str(high_threshold_channels)))
             # Perform quick global threshold scan to determine highest channel threshold
-            log.info('begin quick global threshold scan for c%d-%d' % chip_info)
+            log.info('begin quick global threshold scan for %d-c%d' % chip_info)
             break_flag = False
             while global_threshold >= global_threshold_min and not break_flag:
                 clear_buffer(controller)
@@ -219,17 +174,17 @@ try:
                 for channel in range(32):
                     if npackets[channel] >= threshold_rate * quick_run_time:
                         if verbose:
-                            log.info('c%d-%d-ch%d rate is %.2f Hz' % \
-                                         (chip_id, io_chain, channel,
+                            log.info('%d-c%d-ch%d rate is %.2f Hz' % \
+                                         (io_chain, chip_id, channel,
                                           npackets[channel]/quick_run_time))
                         break_flag = True
                 if not break_flag:
                     global_threshold -= global_threshold_step
             if global_threshold < global_threshold_min: global_threshold = global_threshold_min
-            log.info('quick global threshold scan for c%d-%d complete: %d' % \
-                         (chip_id, io_chain, global_threshold))
+            log.info('quick global threshold scan for %d-c%d complete: %d' % \
+                         (io_chain, chip_id, global_threshold))
             # Perform slow global threshold scan to closely determine global threshold
-            log.info('begin fine global threshold scan for c%d-%d' % chip_info)
+            log.info('begin fine global threshold scan for %d-c%d' % chip_info)
             break_flag = False
             while global_threshold <= global_threshold_max and not break_flag:
                 break_flag = True
@@ -247,15 +202,15 @@ try:
                 for channel in range(32):
                     if npackets[channel] > threshold_rate * run_time:
                         if verbose:
-                            log.info('c%d-%d-ch%d rate is %.2f Hz' % \
-                                         (chip_id, io_chain, channel, npackets[channel]/run_time))
+                            log.info('%d-c%d-ch%d rate is %.2f Hz' % \
+                                         (io_chain, chip_id, channel, npackets[channel]/run_time))
                         break_flag = False
                 if not break_flag:
                     global_threshold += global_threshold_step
-            log.info('fine global threshold scan for c%d-%d complete: %d' % \
-                         (chip_id, io_chain, global_threshold))
+            log.info('fine global threshold scan for %d-c%d complete: %d' % \
+                         (io_chain, chip_id, global_threshold))
             # Run quick pixel trim scan
-            log.info('begin quick pixel trim scan for c%d-%d' % chip_info)
+            log.info('begin quick pixel trim scan for %d-c%d' % chip_info)
             pixel_trim = pixel_trim_max
             disabled_channels = [] # channels that are disabled during quick pixel trim scan
             channel_at_threshold = [channel in high_threshold_channels for channel in range(32)]
@@ -282,8 +237,8 @@ try:
                         channel_at_threshold[channel] = True
                         disabled_channels += [channel]
                         if verbose:
-                            log.info('c%d-%d-ch%d rate is %.2f Hz' % \
-                                         (chip_id, io_chain, channel,
+                            log.info('%d-c%d-ch%d rate is %.2f Hz' % \
+                                         (io_chain, chip_id, channel,
                                           npackets[channel]/quick_run_time))
                 controller.disable(chip_id=chip_id, channel_list=disabled_channels,
                                    io_chain=io_chain)
@@ -292,12 +247,12 @@ try:
                     break
                 pixel_trim -= pixel_trim_step
             if pixel_trim < pixel_trim_min: pixel_trim = pixel_trim_min
-            log.info('quick pixel trim scan for c%d-%d complete: %s' % \
-                         (chip_id, io_chain, str(pixel_trims)))
+            log.info('quick pixel trim scan for %d-c%d complete: %s' % \
+                         (io_chain, chip_id, str(pixel_trims)))
             controller.enable(chip_id=chip_id, channel_list=disabled_channels)
             # re-enable channels
             # Perform slow pixel scan to closely determine pixel trims
-            log.info('begin fine pixel trim scan for c%d-%d' % chip_info)
+            log.info('begin fine pixel trim scan for %d-c%d' % chip_info)
             while pixel_trim <= pixel_trim_max:
                 break_flag = True
                 clear_buffer(controller)
@@ -314,8 +269,8 @@ try:
                 for channel in range(32):
                     if npackets[channel] > threshold_rate * run_time:
                         if verbose:
-                            log.info('c%d-%d-ch%d rate is %.2f Hz' % \
-                                         (chip_id, io_chain, channel, npackets[channel]/run_time))
+                            log.info('%d-c%d-ch%d rate is %.2f Hz' % \
+                                         (io_chain, chip_id, channel, npackets[channel]/run_time))
                         if pixel_trims[channel] >= pixel_trim_max:
                             pixel_trims[channel] = pixel_trim_max
                         else:
@@ -323,21 +278,21 @@ try:
                 if all([n <= threshold_rate * run_time for n in npackets]):
                     break
                 pixel_trim += pixel_trim_step
-            log.info('fine pixel trim scan for c%d-%d complete: %s' % \
-                         (chip_id, io_chain, pixel_trims))
+            log.info('fine pixel trim scan for %d-c%d complete: %s' % \
+                         (io_chain, chip_id, pixel_trims))
             # Check one last time for high rate channels
             log.info('checking rate with configuration')
             clear_buffer(controller)
             controller.write_configuration(chip0, range(10), write_read=run_time,
                                            message='rate check')
             npackets = npackets_by_channel(controller.reads[-1], chip_id)
-            log.info('c%d-%d rate is %.2f Hz' % \
-                             (chip_id, io_chain, sum(npackets)/run_time))
+            log.info('%d-c%d rate is %.2f Hz' % \
+                             (io_chain, chip_id, sum(npackets)/run_time))
             high_rate_channels = []
             for channel in range(32):
                 if verbose:
-                    log.info('c%d-%d-ch%d rate is %.2f Hz' % \
-                                 (chip_id, io_chain, channel, npackets[channel]/run_time))
+                    log.info('%d-c%d-ch%d rate is %.2f Hz' % \
+                                 (io_chain, chip_id, channel, npackets[channel]/run_time))
                 if npackets[channel] > max_rate * run_time:
                     high_rate_channels += [channel]
             if len(high_rate_channels) > 0:
@@ -360,20 +315,20 @@ try:
                 log.debug('num 0s: %d, num 31s: %d, FoM: %.2f', num_0s,
                         num_31s, num_31s + 0.5*num_0s)
             chip_configurations += [config]
-            configuration_file = outdir + '/%s_c%d-%d_config.json' % \
-                (board_info, chip_id, io_chain)
+            configuration_file = outdir + '/%s-%d-c%d_config.json' % \
+                (board_info, io_chain, chip_id)
             config.write(configuration_file, force=True)
             log.info('configuration saved to %s' % configuration_file)
             # Disable chip for rest of loop
             controller.disable(chip_id=chip_id, io_chain=io_chain)
-            log.info('c%d-%d configuration complete' % chip_info)
+            log.info('%d-c%d configuration complete' % chip_info)
             finish_time = time.time()
             if verbose:
-                log.debug('c%d-%d configuration took %.2f s' % \
-                              (chip_id, io_chain, finish_time - start_time))
+                log.debug('%d-c%d configuration took %.2f s' % \
+                              (io_chain, chip_id, finish_time - start_time))
         except Exception as error:
             log.exception(error)
-            log.error('c%d-%d configuration failed!' % chip_info)
+            log.error('%d-c%d configuration failed!' % chip_info)
             controller.disable(chip_id=chip_id, io_chain=io_chain)
             return_code = 2
             continue
@@ -382,15 +337,7 @@ try:
 
     # Load configuration onto chips and check final rate
     log.info('board rate check')
-    for chip in controller.chips:
-        chip_id = chip.chip_id
-        io_chain = chip.io_chain
-        configuration_file = outdir + '/%s_c%d-%d_config.json' % \
-            (board_info, chip_id, io_chain)
-        if not os.path.isfile(configuration_file):
-            continue
-        chip.config.load(configuration_file)
-        controller.write_configuration(chip)
+    larpix_scripting.load_chip_configurations(controller, board_info, outdir)
     clear_buffer(controller)
     controller.run(run_time,'check rate')
     packets = controller.reads[-1]
@@ -400,15 +347,15 @@ try:
         chip_id = chip.chip_id
         io_chain = chip.io_chain
         if chip_id in npackets.keys():
-            log.info('%s-c%d-%d rate: %.2f Hz' % \
-                         (board_info, chip_id, io_chain, sum(npackets[chip_id])/run_time))
+            log.info('%s-%d-c%d rate: %.2f Hz' % \
+                         (board_info, io_chain, chip_id, sum(npackets[chip_id])/run_time))
             for channel in range(32):
-                log.info('%s-c%d-%d-ch%d rate: %.2f Hz' % \
-                             (board_info, chip_id, io_chain, channel,
+                log.info('%s-%d-c%d-ch%d rate: %.2f Hz' % \
+                             (board_info, io_chain, chip_id, channel,
                               npackets[chip_id][channel]/run_time))
         else:
-            log.warn('%s-c%d-%d no packets received' % \
-                         (board_info, chip_id, io_chain))
+            log.warn('%s-%d-c%d no packets received' % \
+                         (board_info, io_chain, chip_id))
 except Exception as error:
     log.exception(error)
     return_code = 1
