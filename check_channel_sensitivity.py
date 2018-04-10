@@ -95,7 +95,6 @@ if outdir is None:
     outdir = sl.script_logdir
 
 try:
-    larpix.enable_logger()
     controller = larpix.Controller(timeout=0.01)
     # Initial configuration of chips
     chip_set = json.load(open(infile,'r'))

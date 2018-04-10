@@ -1,7 +1,6 @@
 import time
 import sys
 from larpix.quickstart import *
-from larpix.larpix import enable_logger, flush_logger, SerialPort, disable_logger()
 from helpers.logging import ScriptLogger
 
 parser = argparse.ArgumentParser()
