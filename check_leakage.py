@@ -158,19 +158,19 @@ try:
     for chip_idx,chip in enumerate(controller.chips):
         chip_id = chip.chip_id
         io_chain = chip.io_chain
-        try:
-            chip_mean = sum(board_results[chip_idx]['rate']) /\
-                len(board_results[chip_idx]['rate'])
-            chip_rms = sum(abs(rate - chip_mean) for rate in board_results[chip_idx]['rate'])\
-                /len(board_results[chip_idx]['rate'])
-            log.info('%s-c%d-%d mean leakage rate: %.2f Hz, rms: %.2f Hz' % \
-                         (board_info, chip_id, io_chain, chip_mean, chip_rms))
-            for channel_idx,channel in enumerate(board_results[chip_idx]['channel']):
-                log.info('%s-c%d-%d-ch%d rate: %.2f Hz' % \
-                             (board_info, chip_id, io_chain, channel,
-                              board_results[chip_idx]['rate'][channel_idx]))
-        except:
-            pass
+        if board_results[chip_idx] is None:
+            log.('%s-c%d-%d skipped' % (board_info, chip_id, io_chain))
+            continue
+        chip_mean = sum(board_results[chip_idx]['rate']) /\
+            len(board_results[chip_idx]['rate'])
+        chip_rms = sum(abs(rate - chip_mean) for rate in board_results[chip_idx]['rate'])\
+            /len(board_results[chip_idx]['rate'])
+        log.info('%s-c%d-%d mean leakage rate: %.2f Hz, rms: %.2f Hz' % \
+                     (board_info, chip_id, io_chain, chip_mean, chip_rms))
+        for channel_idx,channel in enumerate(board_results[chip_idx]['channel']):
+            log.info('%s-c%d-%d-ch%d rate: %.2f Hz' % \
+                         (board_info, chip_id, io_chain, channel,
+                          board_results[chip_idx]['rate'][channel_idx]))
 except Exception as error:
     log.exception(error)
     return_code = 1
