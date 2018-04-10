@@ -16,7 +16,7 @@ import argparse
 import logging
 import time
 import larpix.larpix as larpix
-import noise_tests
+import helpers.noise_tests as noise_tests
 from sys import (exit, stdout)
 import json
 import os
