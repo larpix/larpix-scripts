@@ -1,16 +1,21 @@
+import argparse
 import time
 import sys
 import larpix.larpix as larpix
+import helpers.pathnames as pathnames
 import helpers.larpix_scripting as larpix_scripting
 from larpix.quickstart import *
-from helpers.logging import ScriptLogger
+from helpers.script_logging import ScriptLogger
+
+start_time = time.localtime()
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--board', default='pcb-10_chip_info.json',
-                    help='Path to chip set info file')
-parser.add_argument('--config', required=False, default=None,
-                    help='The configuration to load on the chips (use directory '
-                    'to load multiple configs)')
+parser.add_argument('--board', default=pathnames.default_board_file(start_time),
+                    help='path to chip set info file (default: %(default)s)')
+parser.add_argument('--config', required=False,
+                    default=pathnames.default_config_dir(start_time),
+                    help='the configuration to load on the chips, use directory '
+                    'to load multiple configs (default: %(default)s)')
 parser.add_argument('--subruns', default=1, required=False, type=int,
                     help='The number of data collection times (default: '
                     '%(default)s)')
@@ -23,7 +28,7 @@ parser.add_argument('--global_threshold_correction', default=0, required=False,
                     ' files (default: %(default)s)')
 args = parser.parse_args()
 
-sl = ScriptLogger('data_run')
+sl = ScriptLogger(start_time)
 log = sl.script_log
 
 try:

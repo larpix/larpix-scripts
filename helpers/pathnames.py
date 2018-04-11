@@ -5,8 +5,9 @@ Helper functions for keeping the default pathnames for larpix-scripts straight
 import time
 import os
 import larpix
+import sys
 
-script_name = os.path.dirname(os.path.basename(__file__))
+script_name = os.path.splitext(sys.argv[0])[0]
 
 def default_datadir(start_time):
     datadir = 'data/' + time.strftime('%Y_%m_%d', start_time) + '/'
@@ -25,21 +26,21 @@ def default_board_file(start_time):
     return board_file
 
 def default_script_logdir(start_time):
-    logdir = self.default_datadir(start_time) + self.script_name + '_' + \
+    logdir = default_datadir(start_time) + script_name + '_' + \
         time.strftime('%Y_%m_%d_%H_%M_%S', start_time) + '/'
     return logdir
 
 def default_script_logfile(start_time):
-    logfile = self.default_script_logdir(start_time) + self.script_name + '_' + \
+    logfile = default_script_logdir(start_time) + script_name + '_' + \
         time.strftime('%Y_%m_%d_%H_%M_%S', start_time) + '.log'
     return logfile
 
 def default_data_logdir(start_time):
-    logdir = self.default_datadir(start_time) + 'datalog/'
+    logdir = default_datadir(start_time) + 'datalog/'
     return logdir
 
 def default_data_logfile(start_time):
-    logfile = self.default_data_logdir(start_time) + 'datalog_' + \
+    logfile = default_data_logdir(start_time) + 'datalog_' + \
         time.strftime('%Y_%m_%d_%H_%M_%S_%Z') + '.dat'
     return logfile
 

@@ -13,7 +13,8 @@ Requires a .json file containing chip-ids and daisy chain data formatted like
 from __future__ import print_function
 import argparse
 import logging
-from helpers.logging import ScriptLogger
+from helpers.script_logging import ScriptLogger
+import helpers.pathnames as pathnames
 import helpers.larpix_scripting as larpix_scripting
 import time
 import larpix.larpix as larpix
@@ -21,10 +22,13 @@ from sys import (exit, stdout)
 import json
 import os
 
+start_time = time.localtime()
+
 parser = argparse.ArgumentParser()
-parser.add_argument('infile',
-                    help='input file containing chipset info (required)')
-parser.add_argument('outdir', nargs='?', default=None,
+parser.add_argument('--board', default=pathnames.default_board_file(start_time),
+                    help='input file containing chipset info (optional, '
+                    'default: %(default)s)')
+parser.add_argument('-o','--outdir', default=pathnames.default_script_logdir(start_time),
                     help='output directory for log and config files '
                     '(optional, default: %(default)s)')
 parser.add_argument('-v', '--verbose', action='store_true')
@@ -66,11 +70,11 @@ parser.add_argument('--quick_run_time', default=0.1, type=float,
                     'scan - recommended ~run_time/10 '
                     '(optional, units: sec, default: %(default)s)')
 parser.add_argument('--chips', default=None, type=str,
-                    help='chips to include in scan, string of chip_ids separated by commas'
+                    help='chips to include in scan, string of chip_ids separated by commas '
                     '(optional, default: None=all chips in chipset file)')
 args = parser.parse_args()
 
-infile = args.infile
+infile = args.board
 outdir = args.outdir
 verbose = args.verbose
 global_threshold_max = args.global_threshold_max
@@ -91,10 +95,8 @@ else:
 
 return_code = 0
 
-sl = ScriptLogger('configure_chips')
+sl = ScriptLogger(start_time)
 log = sl.script_log
-if outdir is None:
-    outdir = sl.script_logdir
 
 try:
     controller = larpix.Controller(timeout=0.01)

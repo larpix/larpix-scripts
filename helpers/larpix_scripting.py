@@ -1,7 +1,7 @@
 import os
 import json
 import larpix.larpix as larpix
-from helpers.logging import ScriptLogger
+from helpers.script_logging import ScriptLogger
 log = ScriptLogger.get_script_log()
 
 def clear_buffer_quick(controller, run_time=0.05):
@@ -75,7 +75,7 @@ def load_chip_configurations(controller, board, config_path, silence=False):
                 except IOError as error:
                     log.exception(error)
                     log.error('no %s file found in %s' % 
-                              (default_config_filename, config_path)
+                              (default_config_filename, config_path))
             controller.write_configuration(chip)
             if silence:
                 controller.disable(chip_id=chip_id, io_chain=io_chain)

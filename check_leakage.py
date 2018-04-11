@@ -14,7 +14,8 @@ Requires a .json file containing chip-ids and daisy chain data formatted like
 from __future__ import print_function
 import argparse
 import logging
-from helpers.logging import ScriptLogger
+from helpers.script_logging import ScriptLogger
+import helpers.pathnames as pathnames
 import helpers.larpix_scripting as larpix_scripting
 import time
 import larpix.larpix as larpix
@@ -23,11 +24,14 @@ from sys import (exit, stdout)
 import json
 import os
 
+start_time = time.localtime()
+
 parser = argparse.ArgumentParser()
-parser.add_argument('infile',
-                    help='input file containing chipset info (required)')
-parser.add_argument('outdir', nargs='?', default='.',
-                    help='output directory for log file'
+parser.add_argument('--board', default=pathnames.default_board_file(start_time),
+                    help='input file containing chipset info (optional, default: '
+                    '%(default)s)')
+parser.add_argument('-o','--outdir', default=pathnames.default_script_logdir(start_time),
+                    help='output directory for log file '
                     '(optional, default: %(default)s)')
 parser.add_argument('-v', '--verbose', action='store_true')
 parser.add_argument('--reset_cycles', default=None, type=int,
@@ -42,11 +46,11 @@ parser.add_argument('--configuration_file', default='physics.json',
                     help='initial chip configuration file to load '
                     '(optional, default: %(default)s)')
 parser.add_argument('--chips', default=None, type=str,
-                    help='chips to include in scan, string of chip_ids separated by commas'
+                    help='chips to include in scan, string of chip_ids separated by commas '
                     '(optional, default: None=all chips in chipset file)')
 args = parser.parse_args()
 
-infile = args.infile
+infile = args.board
 outdir = args.outdir
 verbose = args.verbose
 reset_cycles = args.reset_cycles
@@ -61,10 +65,8 @@ else:
 
 return_code = 0
 
-sl = ScriptLogger('check_leakage')
-log = sl.script_log
-if outdir is None:
-    outdir = sl.script_logdir
+sl = ScriptLogger(start_time)
+log = sl.get_script_log()
 
 try:
     controller = larpix.Controller(timeout=0.01)
@@ -120,7 +122,7 @@ try:
         chip_id = chip.chip_id
         io_chain = chip.io_chain
         if board_results[chip_idx] is None:
-            log.('%s-%d-c%d skipped' % (board_info, io_chain, chip_id))
+            log.info('%s-%d-c%d skipped' % (board_info, io_chain, chip_id))
             continue
         chip_mean = sum(board_results[chip_idx]['rate']) /\
             len(board_results[chip_idx]['rate'])
