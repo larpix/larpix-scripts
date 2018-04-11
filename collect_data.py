@@ -8,11 +8,10 @@ from helpers.logging import ScriptLogger
 parser = argparse.ArgumentParser()
 parser.add_argument('--board', default='pcb-10_chip_info.json',
                     help='Path to chip set info file')
-parser.add_argument('--config', required=False,
-                    default=larpix_scripting.default_config(),
-                    help='The configuration to load on the chips (use dir if '
-                    'wanting to load multiple configs)')
-parser.add_argument('--subruns', default=1, required=False, type=int
+parser.add_argument('--config', required=False, default=None,
+                    help='The configuration to load on the chips (use directory '
+                    'to load multiple configs)')
+parser.add_argument('--subruns', default=1, required=False, type=int,
                     help='The number of data collection times (default: '
                     '%(default)s)')
 parser.add_argument('-t','--run_time', default=60, required=False, type=float,
@@ -26,8 +25,6 @@ args = parser.parse_args()
 
 sl = ScriptLogger('data_run')
 log = sl.script_log
-if outdir is None:
-    outdir = sl.script_logdir
 
 try:
     controller = larpix.Controller(timeout=0.01)

@@ -69,7 +69,7 @@ else:
 
 return_code = 0
 
-sl = ScriptLogger('check_channel_sensitivity')
+sl = ScriptLogger()
 log = sl.script_log
 if outdir is None:
     outdir = sl.script_logdir

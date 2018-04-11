@@ -2,19 +2,7 @@ import os
 import json
 import larpix.larpix as larpix
 from helpers.logging import ScriptLogger
-import time
-import logging
-log = logging.getLogger(__name__)
-
-default_config_dir = ScriptLogger.default_datadir(time.time()) + \
-    'default_config/'
-default_config_filename = 'default_config.json'
-
-def default_config():
-    default_config = 'physics.json'
-    if os.path.isfile(default_config_dir + default_config_filename):
-        default_config = default_config_dir + default_config_filename
-    return default_config
+log = ScriptLogger.get_script_log()
 
 def clear_buffer_quick(controller, run_time=0.05):
     controller.run(run_time,'clear buffer (quick)')
