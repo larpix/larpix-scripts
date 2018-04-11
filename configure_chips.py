@@ -75,9 +75,9 @@ parser.add_argument('--quick_run_time', default=0.1, type=float,
                     help='read time for calculating trigger rate on initial quick threshold '
                     'scan - recommended ~run_time/10 '
                     '(optional, units: sec, default: %(default)s)')
-parser.add_argument('--chips', default=None, type=str,
-                    help='chips to include in scan, string of chip_ids separated by commas '
-                    '(optional, default: None=all chips in chipset file)')
+parser.add_argument('--chips', default=None, type=int, nargs='+',
+                    help='chips to include in scan '
+                    '(optional, default: all chips in chipset file)')
 args = parser.parse_args()
 
 infile = args.board
@@ -97,10 +97,7 @@ threshold_rate = args.threshold_rate
 max_rate = args.max_rate
 run_time = args.run_time
 quick_run_time = args.quick_run_time
-if not args.chips is None:
-    chips_to_scan = [int(chip_id) for chip_id in args.chips.split(',')]
-else:
-    chips_to_scan = None
+chips_to_scan = args.chips
 
 return_code = 0
 

@@ -24,7 +24,7 @@ for chip in board_info_map['pcb-10']['chip_list']:
                    'datalog/channel_sensitivty_%s '
                    '--global_threshold_correction %d '
                    '--configuration_file %s '
-                   '-v --chips "%d"' % (specifier, global_threshold_correction, args.config,
+                   '-v --chips %d' % (specifier, global_threshold_correction, args.config,
                                         chip[0]))
         print command
         system(command)

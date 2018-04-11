@@ -51,9 +51,9 @@ parser.add_argument('--configuration_file', default=None,
                     '(optional)' % (pathnames.default_config_dir(start_time),
                                     pathnames.default_config_file(start_time),
                                     default_config))
-parser.add_argument('--chips', default=None, type=str,
-                    help='chips to include in scan, string of chip_ids separated by commas '
-                    '(optional, default: None=all chips in chipset file)')
+parser.add_argument('--chips', default=None, nargs='+', type=int
+                    help='chips to include in scan '
+                    '(optional, default: all chips in chipset file)')
 args = parser.parse_args()
 
 infile = args.board
@@ -67,10 +67,7 @@ config_file = args.configuration_file
 if config_file is None:
     config_file = pathnames.default_config_dir(start_time)
     default_config = pathnames.make_default_config_file(start_time, default_config)
-if not args.chips is None:
-    chips_to_scan = [int(chip_id) for chip_id in args.chips.split(',')]
-else:
-    chips_to_scan = None
+chips_to_scan = args.chips
 
 return_code = 0
 
