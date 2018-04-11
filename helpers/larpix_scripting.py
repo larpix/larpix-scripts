@@ -50,7 +50,8 @@ def load_board(controller, infile):
         controller.chips.append(larpix.Chip(chip_id, io_chain))
     return chip_set['board']
 
-def load_chip_configurations(controller, board, config_path, silence=False):
+def load_chip_configurations(controller, board, config_path, silence=False,
+                             default_config=None):
     if os.path.isfile(config_path) and \
             os.path.splitext(config_path)[1] == '.json':
         for chip in controller.chips:
@@ -67,15 +68,15 @@ def load_chip_configurations(controller, board, config_path, silence=False):
                                      chip_identifier)
                 log.info('%s-%d-c%d config loaded')
             except IOError as error:
-                log.exception(error)
                 log.warn('%s-%d-c%d config not found' % chip_identifier)
-                log.info('loading %s' % default_config_filename)
-                try:
-                    chip.config.load(config_path + default_config_filename)
-                except IOError as error:
-                    log.exception(error)
-                    log.error('no %s file found in %s' % 
-                              (default_config_filename, config_path))
+                if not default_config is None:
+                    log.info('loading %s' % default_config)
+                    try:
+                        chip.config.load(default_config)
+                        log.info('%s-%d-c%d default config loaded' % chip_identifier)
+                    except IOError as error:
+                        log.exception(error)
+                        log.error('no default config found!')
             controller.write_configuration(chip)
             if silence:
                 controller.disable(chip_id=chip_id, io_chain=io_chain)

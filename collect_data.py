@@ -12,10 +12,9 @@ start_time = time.localtime()
 parser = argparse.ArgumentParser()
 parser.add_argument('--board', default=pathnames.default_board_file(start_time),
                     help='path to chip set info file (default: %(default)s)')
-parser.add_argument('--config', required=False,
-                    default=pathnames.default_config_dir(start_time),
-                    help='the configuration to load on the chips, use directory '
-                    'to load multiple configs (default: %(default)s)')
+parser.add_argument('--config', default=pathnames.default_config_dir(start_time),
+                    help='initial chip configuration file to load '
+                    '(default: %(default)s)')
 parser.add_argument('--subruns', default=1, required=False, type=int,
                     help='The number of data collection times (default: '
                     '%(default)s)')

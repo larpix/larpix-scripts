@@ -25,6 +25,7 @@ import json
 import os
 
 start_time = time.localtime()
+default_config = 'physics.json'
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--board', default=pathnames.default_board_file(start_time),
@@ -38,9 +39,14 @@ parser.add_argument('--global_threshold', default=0, type=int,
                     help='(optional, default: %(default)s)')
 parser.add_argument('--run_time', default=0.05, type=int,
                     help='(optional, units: sec,  default: %(default)s)')
-parser.add_argument('--configuration_file', default='physics.json',
+parser.add_argument('--configuration_file', default=None,
                     help='initial chip configuration file to load '
-                    '(optional, default: %(default)s)')
+                    'by default will look in %s for individual chip configurations, '
+                    'if chip config not found, will load %s, '
+                    'if this file does not exist, will load %s and generate new default '
+                    '(optional)' % (pathnames.default_config_dir(start_time),
+                                    pathnames.default_config_file(start_time),
+                                    default_config))
 parser.add_argument('--chips', default=None, type=str,
                     help='chips to include in scan, string of chip_ids separated by commas '
                     '(optional, default: None=all chips in chipset file)')
@@ -52,6 +58,9 @@ verbose = args.verbose
 global_threshold = args.global_threshold
 run_time = args.run_time
 config_file = args.configuration_file
+if config_file is None:
+    config_file = pathnames.default_config_dir(start_time)
+    default_config = pathnames.make_default_config_file(start_time, default_config)
 if not args.chips is None:
     chips_to_scan = [int(chip_id) for chip_id in args.chips.split(',')]
 else:
@@ -70,7 +79,7 @@ try:
     board_info = larpix_scripting.load_board(controller, infile)
     log.info('begin initial configuration of chips for board %s' % board_info)
     config_ok, different_registers = larpix_scripting.load_chip_configurations(
-        controller, board_info, config_file, silence=True)
+        controller, board_info, config_file, silence=True, default_config=default_config)
     if config_ok:
         log.info('initial configuration of chips complete')
     
