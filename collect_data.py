@@ -16,7 +16,7 @@ parser.add_argument('--config', default=pathnames.default_config_dir(start_time)
                     help='initial chip configuration file to load '
                     '(default: %(default)s)')
 parser.add_argument('--subruns', default=1, required=False, type=int,
-                    help='The number of data collection times (default: '
+                    help='The number of data collection periods (default: '
                     '%(default)s)')
 parser.add_argument('-t','--run_time', default=60, required=False, type=float,
                     help='The run time for each subrun in sec (default: '

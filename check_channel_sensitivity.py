@@ -57,7 +57,7 @@ parser.add_argument('--configuration_file', default=None,
                     '(optional)' % (pathnames.default_config_dir(start_time),
                                     pathnames.default_config_file(start_time),
                                     default_config))
-parser.add_argument('--chips', default=None, nargs='+', type=int
+parser.add_argument('--chips', default=None, nargs='+', type=int,
                     help='chips to include in scan '
                     '(optional, default: all chips in chipset file)')
 args = parser.parse_args()
@@ -73,7 +73,7 @@ n_pulses = args.n_pulses
 config_file = args.configuration_file
 if config_file is None:
     config_file = pathnames.default_config_dir(start_time)
-    default_config = pathnames.make_default_config_file(start_time, default_config)
+    default_config = pathnames.make_default_config(start_time, default_config)
 chips_to_scan = args.chips
 
 return_code = 0

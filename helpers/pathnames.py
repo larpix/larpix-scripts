@@ -8,7 +8,7 @@ import larpix.larpix as larpix
 import sys
 import shutil
 
-script_name = os.path.splitext(sys.argv[0])[0]
+script_name = os.path.basename(os.path.splitext(sys.argv[0])[0])
 
 def default_datadir(start_time):
     datadir = 'data/' + time.strftime('%Y_%m_%d', start_time) + '/'
@@ -69,6 +69,6 @@ def mkdir_p(path):
         try:
             os.makedirs(path)
         except OSError as exc: # Python >2.5
-            if exc.errno == errno.EEXIST and os.path.isdir(path):
+            if os.path.isdir(path):
                 pass
             else: raise
