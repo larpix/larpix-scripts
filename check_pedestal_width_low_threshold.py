@@ -60,7 +60,7 @@ run_time = args.run_time
 config_file = args.configuration_file
 if config_file is None:
     config_file = pathnames.default_config_dir(start_time)
-    default_config = pathnames.make_default_config_file(start_time, default_config)
+    default_config = pathnames.make_default_config(start_time, default_config)
 chips_to_scan = args.chips
 
 return_code = 0
