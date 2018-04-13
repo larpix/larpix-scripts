@@ -38,25 +38,6 @@ import json
 import calibration
 parse = Controller.parse_input
 
-default_cal_data = {
-    'pedestal_vref' : 1.5,
-    'pedestal_vcm' : 0.2,
-    'pedestal_adc' : 29.5,
-    'pedestal_adc_sigma' : 0.,
-    'pedestal_v' : 0.350,
-    'pedestal_v_sigma' : 0.,
-    'gain_v' : 0.005,
-    'gain_vcm' : 0.2,
-    'gain_e' : 4e-6
-}
-
-def fill_missing_with_default(cal_data, default_cal_data=default_cal_data):
-    for chipid in cal_data:
-        for channelid in cal_data[chipid]:
-            for cal_field in default_cal_data:
-                if not cal_field in cal_data[chipid][channelid]:
-                    cal_data[chipid][channelid][cal_field] = default_cal_data[cal_field]
-
 def update_cal_data(cal_data, new_cal_data):
     if new_cal_data is None:
         return
