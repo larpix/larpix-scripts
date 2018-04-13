@@ -1,5 +1,6 @@
 from larpix.analyzers import LogAnalyzer
 from larpix.larpix import Packet
+from larpix.Timestamp import Timestamp
 import numpy as np
 import argparse
 import json
@@ -140,6 +141,73 @@ def extract_chip_channel_ids(filename, max_trans=None, verbose=False):
             loop_data['n_packets'], loop_data['n_packets_cut']))
     return chip_channel_ids
 
+def extract_chip_rel_timing(filename, verbose=False, max_trans=None):
+    la = LogAnalyzer(filename)
+    last_timestamp = {}
+    rel_offset = {}
+    loop_data = {
+        'n_trans': 0,
+        'n_trans_cut': 0,
+        'n_packets': 0,
+        'n_packets_cut': 0
+        }
+    chips_silenced = False # cuts out all data before first write command
+    while True:
+        curr_trans = la.next_transmission()
+        if curr_trans is None: break
+        if loop_data['n_trans'] == max_trans: break
+        loop_data['n_trans'] += 1
+        if verbose and loop_data['n_trans'] % 100 == 0:
+            print('trans: %d, trans_cut: %d, packets: %d, packets_cut: %d\r' %
+                  (loop_data['n_trans'], loop_data['n_trans_cut'], loop_data['n_packets'],
+                   loop_data['n_packets_cut'])),
+            sys.stdout.flush()
+        if curr_trans['block_type'] is 'data' and curr_trans['data_type'] is 'write':
+            chips_silenced = True # assumes first write is a silence command
+        if not is_good_data(curr_trans):
+            loop_data['n_trans_cut'] += 1
+            continue
+        if not chips_silenced:
+            loop_data['n_trans_cut'] += 1
+            continue
+        loop_data['n_packets'] += len(curr_trans['packets'])
+        prev_ns = None
+        prev_chip_id = None
+        for packet in curr_trans['packets']:
+            if not is_good_packet(packet):
+                loop_data['n_packets_cut'] += 1
+                continue
+            chip_id = str(packet.chipid)
+            cpu_time = curr_trans['time']
+            ref_time = None
+            if chip_id in last_timestamp.keys():
+                ref_time = last_timestamp[str(packet.chipid)]
+            current_timestamp = Timestamp.from_packet(packet, cpu_time, ref_time)
+            if len(last_timestamp.keys()) == 0:
+                for chip in range(255):
+                    last_timestamp[str(chip)] = current_timestamp
+            else:
+                last_timestamp[chip_id] = current_timestamp
+            if prev_chip_id is None:
+                prev_ns = current_timestamp.ns
+                prev_chip_id = chip_id
+                continue
+            if chip_id != prev_chip_id:
+                # two different chips in serial read almost simultaneous
+                #   -> store time difference
+                dt = prev_ns - current_timestamp.ns
+                try:
+                    rel_offset[chip_id][prev_chip_id] += [dt]
+                except KeyError:
+                    rel_offset[chip_id] = { prev_chip_id: [dt] }
+            prev_chip_id = chip_id
+            prev_ns = current_timestamp.ns
+    print('')
+    print(' N_transmissions: %4d, N_transmissions removed: %4d' % (
+            loop_data['n_trans'], loop_data['n_trans_cut']))
+    print(' N_packets: %4d, N_packets removed: %4d' % (
+            loop_data['n_packets'], loop_data['n_packets_cut']))
+    return rel_offset
 
 def extract_adc_dist(filename, adc_max=256, adc_min=0, adc_step=2, max_trans=None,
                      verbose=False):
@@ -274,4 +342,8 @@ def do_gain_calibration(infile, vref=None, vcm=None, verbose=False):
                         'gain_vcm' : gain_vcm
                         }}
     return gain_data
+
+def do_timing_calibration(infile, verbose=False):
+    pass
+
 
