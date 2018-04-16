@@ -124,4 +124,4 @@ def load_chip_configurations(controller, board, config_path, silence=False,
             if silence:
                 controller.disable(chip_id=chip_id, io_chain=io_chain)
     else: raise IOError('specified configuration not found')
-    return verify_chip_configuration(controller)
+    return enforce_chip_configuration(controller)
