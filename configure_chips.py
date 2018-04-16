@@ -27,13 +27,9 @@ def npackets_by_channel(packets, chip_id):
     return npackets
 
 def npackets_by_chip_channel(packets):
-    npackets = {}
+    npackets = [[0]*32]*256
     for packet in packets:
-        try:
-            npackets[packet.chipid][packet.channel_id] += 1
-        except KeyError:
-            npackets[packet.chipid] = [0]*32
-            npackets[packet.chipid][packet.channel_id] += 1
+        npackets[packet.chipid][packet.channel_id] += 1
     return npackets
 
 def clear_buffer_quick(controller):
