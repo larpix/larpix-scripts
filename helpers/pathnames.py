@@ -44,12 +44,12 @@ def make_default_board(start_time, board_info_file, force=False):
 
 def default_script_logdir(start_time):
     logdir = default_datadir(start_time) + script_name + '_' + \
-        time.strftime('%Y_%m_%d_%H_%M_%S', start_time) + '/'
+        time.strftime('%Y_%m_%d_%H_%M_%S_%Z', start_time) + '/'
     return logdir
 
 def default_script_logfile(start_time):
     logfile = default_script_logdir(start_time) + script_name + '_' + \
-        time.strftime('%Y_%m_%d_%H_%M_%S', start_time) + '.log'
+        time.strftime('%Y_%m_%d_%H_%M_%S_%Z', start_time) + '.log'
     return logfile
 
 def default_data_logdir(start_time):
