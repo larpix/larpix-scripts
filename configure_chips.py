@@ -192,7 +192,7 @@ try:
             controller.write_configuration(chip0, range(10), write_read=run_time,
                                            message='rate check')
             npackets = npackets_by_chip_channel(controller.reads[-1])
-            for chip in chips:
+            for chip in controller.chips:
                 chip_id = chip.chip_id
                 if sum(npackets[chip_id]) <= 0:
                     continue
@@ -218,13 +218,14 @@ try:
                               str(high_threshold_channels[chip_id])))
 
         # Perform quick global threshold scan to determine highest channel threshold
-        log.info('begin quick global threshold scan' % chip_info)
+        log.info('begin quick global threshold scan')
         repeat_flag = False
         break_flag = False
         scan_complete = {}
         for chip in controller.chips: scan_complete[chip.chip_id] = False
         test_threshold = global_threshold_max
         while test_threshold >= global_threshold_min and not break_flag:
+            repeat_flag = False
             clear_buffer(controller)
             modified_registers = [32]
             for chip in controller.chips:
@@ -244,7 +245,8 @@ try:
                 if sum(npackets[chip_id]) <= 0:
                     continue
                 log.info('threshold %d - chip rate %.2f Hz' % \
-                             (global_threshold, sum(npackets[chip_id])/quick_run_time))
+                             (global_threshold[chip_id], \
+                                  sum(npackets[chip_id])/quick_run_time))
                 for channel in range(32):
                     if npackets[chip_id][channel] >= threshold_rate * quick_run_time:
                         if verbose:
@@ -253,7 +255,7 @@ try:
                                           npackets[chip_id][channel]/quick_run_time))
                         scan_complete[chip_id] = True
                         repeat_flag = True
-                        controller.disable(chip_id=chip_d)
+                        controller.disable(chip_id=chip_id)
             break_flag = all(scan_complete.values())
             if not break_flag:
                 if not repeat_flag:
@@ -326,6 +328,7 @@ try:
                     scan_complete[chip_id][channel] = True
 
         while test_trim >= pixel_trim_min and not break_flag:
+            log.info('trim - %d' % test_trim)
             repeat_flag = False
             clear_buffer(controller)
             modified_registers = range(32)
@@ -354,8 +357,8 @@ try:
                                           npackets[chip_id][channel]/quick_run_time))
                         controller.disable(chip_id=chip_id,
                                            channel_list=list(disabled_channels[chip_id]))
-            if all([complete for chip_complete in scan_complete
-                    for complete in chip_complete]):
+            if all([complete for chip_id in scan_complete
+                    for complete in scan_complete[chip_id]]):
                 break_flag = True
             if not repeat_flag:
                 test_trim -= pixel_trim_step
@@ -454,10 +457,9 @@ try:
                               (chip_id, io_chain, finish_time - start_time))
     except Exception as error:
         log.exception(error)
-        log.error('configuration failed!' % chip_info)
+        log.error('configuration failed!')
         controller.disable(chip_id=chip_id, io_chain=io_chain)
         return_code = 2
-        continue
 
     log.info('all chips configuration complete')
 
@@ -479,7 +481,7 @@ try:
     npackets = npackets_by_chip_channel(controller.reads[-1])
     for chip in controller.chips:
         chip_id = chip.chip_id
-        if chip_id in npackets.keys():
+        if chip_id in range(len(npackets)):
             log.info('%s-c%d rate: %.2f Hz' % \
                          (board_info, chip_id, sum(npackets[chip_id])/run_time))
             for channel in range(32):
