@@ -32,7 +32,7 @@ parser.add_argument('--board', default=pathnames.default_board_file(start_time),
                     help='input file containing chipset info (optional, default: '
                     '%(default)s)')
 parser.add_argument('-o-','--outdir', default=pathnames.default_script_logdir(start_time),
-                    help='output directory for log file '
+                    help='output directory for log file and data files '
                     '(optional, default: %(default)s)')
 parser.add_argument('-v', '--verbose', action='store_true')
 parser.add_argument('--global_threshold', default=0, type=int,
@@ -65,7 +65,10 @@ chips_to_scan = args.chips
 
 return_code = 0
 
-sl = ScriptLogger(start_time)
+script_logfile = outdir + '/' + \
+    os.path.basename(pathnames.default_script_logfile(start_time))
+data_logfile = outdir + '/' + os.path.basename(pathnames.default_data_logfile(start_time))
+sl = ScriptLogger(start_time, script_logfile=script_logfile, data_logfile=data_logfile)
 log = sl.script_log
 if outdir is None:
     outdir = sl.script_logdir
