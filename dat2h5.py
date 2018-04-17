@@ -122,6 +122,8 @@ while True:
                     pixel = geometry.chips[chipid].channel_connections[channel]
                 except KeyError:
                     pixel = geometry.unconnected_pixel
+                except IndexError:
+                    pixel = geometry.unconnected_pixel
                 if pixel.pixelid is None:
                     current_array[current_index][2] = -1
                     current_array[current_index][3] = -1
