@@ -29,6 +29,7 @@ args = parser.parse_args()
 
 sl = ScriptLogger(start_time)
 log = sl.script_log
+log.info('arguments: %s' % str(args))
 
 try:
     controller = larpix.Controller(timeout=0.01)
@@ -38,19 +39,19 @@ try:
         controller, board_info, args.config)
 
     if not args.global_threshold_correction == 0:
-        for chip in c.chips:
+        for chip in controller.chips:
             chip.config.global_threshold += args.global_threshold_correction
-            c.write_configuration(chip,32)
+            controller.write_configuration(chip,32)
 
     for _ in range(args.subruns):
         specifier = time.strftime('%Y_%m_%d_%H_%M_%S')
         log.info('begin collect_data_%s' % specifier)
-        c.run(args.run_time,'collect_data_%s' % specifier)
+        controller.run(args.run_time,'collect_data_%s' % specifier)
         log.info('end collect_data_%s' % specifier)
         log.info('storing...')
         sl.flush_datalog()
         log.info('done')
-        c.reads = []
+        controller.reads = []
 
     log.info('end of run %s' % sl.data_logfile)
 except Exception as error:

@@ -83,6 +83,7 @@ script_logfile = outdir + '/' + \
 data_logfile = outdir + '/' + os.path.basename(pathnames.default_data_logfile(start_time))
 sl = ScriptLogger(start_time, script_logfile=script_logfile, data_logfile=data_logfile)
 log = sl.get_script_log()
+log.info('arguments: %s' % str(args))
 
 try:
     controller = larpix.Controller(timeout=0.01)
@@ -110,7 +111,7 @@ try:
                     board_results += [None]
                     continue
 
-            clear_buffer(controller)
+            larpix_scripting.clear_buffer(controller)
             chip_results = noise_tests.test_min_signal_amplitude(\
                 controller=controller,chip_idx=chip_idx,
                 threshold=chip.config.global_threshold + global_threshold_correction,

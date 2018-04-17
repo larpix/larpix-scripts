@@ -106,6 +106,7 @@ script_logfile = outdir + '/' + \
 data_logfile = outdir + '/' + os.path.basename(pathnames.default_data_logfile(start_time))
 sl = ScriptLogger(start_time, script_logfile=script_logfile, data_logfile=data_logfile)
 log = sl.script_log
+log.info('arguments: %s' % str(args))
 
 try:
     controller = larpix.Controller(timeout=0.01)
@@ -143,11 +144,11 @@ try:
             break_flag = False
             while not break_flag:
                 break_flag = True
-                clear_buffer(controller)
+                larpix_scripting.clear_buffer(controller)
                 log.info('check rate on %d-c%d' % chip_info)
                 controller.write_configuration(chip0, range(10), write_read=run_time,
                                                message='rate check %d-c%d' % chip_info)
-                npackets = npackets_by_channel(controller.reads[-1], chip_id)
+                npackets = larpix_scripting.npackets_by_channel(controller.reads[-1], chip_id)
                 log.info('%d-c%d has a rate of %.2f Hz' % \
                              (io_chain, chip_id, sum(npackets)/run_time))
                 for channel,npacket in enumerate(npackets):
@@ -162,7 +163,7 @@ try:
                 controller.disable(chip_id=chip_id,
                                    channel_list=list(high_threshold_channels),
                                    io_chain=io_chain)
-                clear_buffer(controller)
+                larpix_scripting.clear_buffer(controller)
             if len(high_threshold_channels):
                 log.info('%d-c%d channels with threshold above %d: %s' % \
                              (io_chain, chip_id, global_threshold,
@@ -171,15 +172,15 @@ try:
             log.info('begin quick global threshold scan for %d-c%d' % chip_info)
             break_flag = False
             while global_threshold >= global_threshold_min and not break_flag:
-                clear_buffer(controller)
+                larpix_scripting.clear_buffer(controller)
                 chip.config.global_threshold = global_threshold
                 modified_registers = 32
                 controller.write_configuration(chip, modified_registers)
-                clear_buffer_quick(controller)
+                larpix_scripting.clear_buffer_quick(controller)
                 controller.write_configuration(chip0, range(10), write_read=quick_run_time,
                                                message='quick global threshold scan')
                 packets = controller.reads[-1]
-                npackets = npackets_by_channel(packets, chip_id)
+                npackets = larpix_scripting.npackets_by_channel(packets, chip_id)
                 log.info('threshold %d - chip rate %.2f Hz' % \
                              (global_threshold, sum(npackets)/quick_run_time))
                 for channel in range(32):
@@ -199,15 +200,15 @@ try:
             break_flag = False
             while global_threshold <= global_threshold_max and not break_flag:
                 break_flag = True
-                clear_buffer(controller)
+                larpix_scripting.clear_buffer(controller)
                 chip.config.global_threshold = global_threshold
                 modified_registers = 32
                 controller.write_configuration(chip, modified_registers)
-                clear_buffer_quick(controller)
+                larpix_scripting.clear_buffer_quick(controller)
                 controller.write_configuration(chip0, range(10), write_read=run_time,
                                                message='global threshold scan')
                 packets = controller.reads[-1]
-                npackets = npackets_by_channel(packets, chip_id)
+                npackets = larpix_scripting.npackets_by_channel(packets, chip_id)
                 log.info('threshold %d - chip rate %.2f Hz' % \
                              (global_threshold, sum(npackets)/run_time))
                 for channel in range(32):
@@ -226,15 +227,15 @@ try:
             disabled_channels = [] # channels that are disabled during quick pixel trim scan
             channel_at_threshold = [channel in high_threshold_channels for channel in range(32)]
             while pixel_trim >= pixel_trim_min:
-                clear_buffer(controller)
+                larpix_scripting.clear_buffer(controller)
                 chip.config.pixel_trim_thresholds = pixel_trims
                 modified_registers = range(32)
                 controller.write_configuration(chip, modified_registers)
-                clear_buffer_quick(controller)
+                larpix_scripting.clear_buffer_quick(controller)
                 controller.write_configuration(chip0, range(10), write_read=quick_run_time,
                                                message='quick pixel trim scan')
                 packets = controller.reads[-1]
-                npackets = npackets_by_channel(packets, chip_id)
+                npackets = larpix_scripting.npackets_by_channel(packets, chip_id)
                 log.info('trim %d - chip rate %.2f Hz' % \
                              (pixel_trim, sum(npackets)/quick_run_time))
                 for channel in range(32):
@@ -266,15 +267,15 @@ try:
             log.info('begin fine pixel trim scan for %d-c%d' % chip_info)
             while pixel_trim <= pixel_trim_max:
                 break_flag = True
-                clear_buffer(controller)
+                larpix_scripting.clear_buffer(controller)
                 chip.config.pixel_trim_thresholds = pixel_trims
                 modified_registers = range(32)
                 controller.write_configuration(chip, modified_registers)
-                clear_buffer_quick(controller)
+                larpix_scripting.clear_buffer_quick(controller)
                 controller.write_configuration(chip0, range(10), write_read=run_time,
                                                message='pixel trim scan')
                 packets = controller.reads[-1]
-                npackets = npackets_by_channel(packets, chip_id)
+                npackets = larpix_scripting.npackets_by_channel(packets, chip_id)
                 log.info('trim %d - chip rate %.2f Hz' % \
                              (pixel_trim, sum(npackets)/run_time))
                 for channel in range(32):
@@ -293,10 +294,10 @@ try:
                          (io_chain, chip_id, pixel_trims))
             # Check one last time for high rate channels
             log.info('checking rate with configuration')
-            clear_buffer(controller)
+            larpix_scripting.clear_buffer(controller)
             controller.write_configuration(chip0, range(10), write_read=run_time,
                                            message='rate check')
-            npackets = npackets_by_channel(controller.reads[-1], chip_id)
+            npackets = larpix_scripting.npackets_by_channel(controller.reads[-1], chip_id)
             log.info('%d-c%d rate is %.2f Hz' % \
                              (io_chain, chip_id, sum(npackets)/run_time))
             high_rate_channels = []
@@ -349,11 +350,11 @@ try:
     # Load configuration onto chips and check final rate
     log.info('board rate check')
     larpix_scripting.load_chip_configurations(controller, board_info, outdir)
-    clear_buffer(controller)
+    larpix_scripting.clear_buffer(controller)
     controller.run(run_time,'check rate')
     packets = controller.reads[-1]
     log.info('%s rate: %.2f Hz' % (board_info, len(packets)/run_time))
-    npackets = npackets_by_chip_channel(controller.reads[-1])
+    npackets = larpix_scripting.npackets_by_chip_channel(controller.reads[-1])
     for chip in controller.chips:
         chip_id = chip.chip_id
         io_chain = chip.io_chain

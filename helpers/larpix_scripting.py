@@ -30,7 +30,7 @@ def npackets_by_chip_channel(packets):
             npackets[packet.chipid][packet.channel_id] += 1
     return npackets
 
-def npacket_by_channel(packets, chip_id):
+def npackets_by_channel(packets, chip_id):
     '''
     Sort through packets, counting number of packets from each channel at matches chip_id.
     '''
@@ -101,7 +101,7 @@ def load_chip_configurations(controller, board, config_path, silence=False,
             chip.config.load(config_path)
             controller.write_configuration(chip)
             if silence:
-                controller.disable(chip_id=chip_id, io_chain=io_chain)
+                controller.disable(chip_id=chip.chip_id, io_chain=chip.io_chain)
     elif os.path.isdir(config_path):
         controller.disable()
         for chip in reversed(controller.chips):
@@ -109,7 +109,7 @@ def load_chip_configurations(controller, board, config_path, silence=False,
             try:
                 chip.config.load(config_path + '/%s-%d-c%d_config.json' % \
                                      chip_identifier)
-                log.info('%s-%d-c%d config loaded')
+                log.info('%s-%d-c%d config loaded' % chip_identifier)
             except IOError as error:
                 log.warn('%s-%d-c%d config not found' % chip_identifier)
                 if not default_config is None:
@@ -122,6 +122,6 @@ def load_chip_configurations(controller, board, config_path, silence=False,
                         log.error('no default config found!')
             controller.write_configuration(chip)
             if silence:
-                controller.disable(chip_id=chip_id, io_chain=io_chain)
+                controller.disable(chip_id=chip.chip_id, io_chain=chip.io_chain)
     else: raise IOError('specified configuration not found')
     return enforce_chip_configuration(controller)

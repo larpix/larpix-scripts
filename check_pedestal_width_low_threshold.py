@@ -37,7 +37,7 @@ parser.add_argument('-o-','--outdir', default=pathnames.default_script_logdir(st
 parser.add_argument('-v', '--verbose', action='store_true')
 parser.add_argument('--global_threshold', default=0, type=int,
                     help='(optional, default: %(default)s)')
-parser.add_argument('--run_time', default=0.05, type=int,
+parser.add_argument('--run_time', default=0.05, type=float,
                     help='(optional, units: sec,  default: %(default)s)')
 parser.add_argument('--configuration_file', default=None,
                     help='initial chip configuration file to load '
@@ -70,8 +70,7 @@ script_logfile = outdir + '/' + \
 data_logfile = outdir + '/' + os.path.basename(pathnames.default_data_logfile(start_time))
 sl = ScriptLogger(start_time, script_logfile=script_logfile, data_logfile=data_logfile)
 log = sl.script_log
-if outdir is None:
-    outdir = sl.script_logdir
+log.info('arguments: %s' % str(args))
 
 try:
     controller = larpix.Controller(timeout=0.01)
@@ -99,7 +98,7 @@ try:
                     board_results += [None]
                     continue
 
-            clear_buffer(controller)
+            larpix_scripting.clear_buffer(controller)
             chip_results = noise_tests.noise_test_low_threshold(controller=controller,
                                                                 chip_idx=chip_idx,
                                                                 global_threshold=\
