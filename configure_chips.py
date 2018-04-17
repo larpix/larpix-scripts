@@ -26,7 +26,7 @@ start_time = time.localtime()
 default_config = 'physics.json'
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--board', default=pathnames.default_board_file(start_time),
+parser.add_argument('-b','--board', default=pathnames.default_board_file(start_time),
                     help='input file containing chipset info (optional, '
                     'default: %(default)s)')
 parser.add_argument('-o','--outdir', default=pathnames.default_script_logdir(start_time),
@@ -51,7 +51,7 @@ parser.add_argument('--pixel_trim_min', default=0, type=int,
 parser.add_argument('--pixel_trim_step', default=1, type=int,
                     help='pixel trim step size for fine scan '
                     '(optional, default: %(default)s)')
-parser.add_argument('--configuration_file', default=None,
+parser.add_argument('-s','--configuration_file', default=None,
                     help='initial chip configuration file to load '
                     'by default will look in %s for individual chip configurations, '
                     'if chip config not found, will load %s, '
@@ -67,7 +67,7 @@ parser.add_argument('--max_rate', default=20, type=float,
                     help='maximum per channel trigger rate - configuration will disable '
                     'channels with >= max_rate Hz of triggers at start and end of scan '
                     '(optional, units: Hz, default: %(default)s)')
-parser.add_argument('--run_time', default=1, type=float,
+parser.add_argument('-t','--run_time', default=1, type=float,
                     help='read time for calculating trigger rate - recommended that run_time '
                     '> 1/threshold_rate '
                     '(optional, units: sec, default: %(default)s)')
@@ -75,7 +75,7 @@ parser.add_argument('--quick_run_time', default=0.1, type=float,
                     help='read time for calculating trigger rate on initial quick threshold '
                     'scan - recommended ~run_time/10 '
                     '(optional, units: sec, default: %(default)s)')
-parser.add_argument('--chips', default=None, type=int, nargs='+',
+parser.add_argument('-c','--chips', default=None, type=int, nargs='+',
                     help='chips to include in scan '
                     '(optional, default: all chips in chipset file)')
 args = parser.parse_args()

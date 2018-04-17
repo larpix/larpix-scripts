@@ -10,12 +10,12 @@ from helpers.script_logging import ScriptLogger
 start_time = time.localtime()
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--board', default=pathnames.default_board_file(start_time),
+parser.add_argument('-b','--board', default=pathnames.default_board_file(start_time),
                     help='path to chip set info file (default: %(default)s)')
-parser.add_argument('--config', default=pathnames.default_config_dir(start_time),
+parser.add_argument('-s','--config', default=pathnames.default_config_dir(start_time),
                     help='initial chip configuration file to load '
                     '(default: %(default)s)')
-parser.add_argument('--subruns', default=1, required=False, type=int,
+parser.add_argument('-n','--subruns', default=1, required=False, type=int,
                     help='The number of data collection periods (default: '
                     '%(default)s)')
 parser.add_argument('-t','--run_time', default=60, required=False, type=float,

@@ -28,7 +28,7 @@ start_time = time.localtime()
 default_config = 'physics.json'
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--board', default=pathnames.default_board_file(start_time),
+parser.add_argument('-b','--board', default=pathnames.default_board_file(start_time),
                     help='input file containing chipset info (optional, default: '
                     '%(default)s)')
 parser.add_argument('-o','--outdir', default=pathnames.default_script_logdir(start_time),
@@ -49,7 +49,7 @@ parser.add_argument('--min_dac_amp', default=0, type=int,
                     help='(optional, default: %(default)s)')
 parser.add_argument('--n_pulses', default=10, type=int,
                     help='(optional, default: %(default)s)')
-parser.add_argument('--configuration_file', default=None,
+parser.add_argument(,'-s','--configuration_file', default=None,
                     help='initial chip configuration file to load '
                     'by default will look in %s for individual chip configurations, '
                     'if chip config not found, will load %s, '
@@ -57,7 +57,7 @@ parser.add_argument('--configuration_file', default=None,
                     '(optional)' % (pathnames.default_config_dir(start_time),
                                     pathnames.default_config_file(start_time),
                                     default_config))
-parser.add_argument('--chips', default=None, nargs='+', type=int,
+parser.add_argument('-c','--chips', default=None, nargs='+', type=int,
                     help='chips to include in scan '
                     '(optional, default: all chips in chipset file)')
 args = parser.parse_args()
