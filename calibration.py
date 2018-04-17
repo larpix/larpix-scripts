@@ -248,7 +248,10 @@ def extract_adc_dist(filename, adc_max=256, adc_min=0, adc_step=2, max_trans=Non
             adc = packet.dataword
             try:
                 hist, bins = adc_dist[chip_id][channel_id]
-                hist[np.digitize(adc, bins)-1] += 1
+                try:
+                    hist[np.digitize(adc, bins)-1] += 1
+                except IndexError:
+                    print('adc value %d from c%s-ch%s invalid' % (adc, chip_id, channel_id))
             except KeyError:
                 try:
                     bins = good_bins([], step=adc_step, min_v=adc_min, max_v=adc_max)
