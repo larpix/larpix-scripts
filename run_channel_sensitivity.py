@@ -4,10 +4,14 @@ from larpix.quickstart import board_info_map
 import helpers.pathnames as pathnames
 import time
 import argparse
+import json
 
 start_time = time.localtime()
 
 parser = argparse.ArgumentParser()
+parser.add_argument('-b', '--board', type=str,
+                    default=pathnames.default_board_file(start_time),
+                    help='path to .json file containing chip set info (default: %(default)s)')
 parser.add_argument('-c', '--chip', type=int, nargs='*',
         help='The chip ID(s) to measure', default=[])
 parser.add_argument('-t', '--threshold-correction', type=int,
@@ -19,7 +23,9 @@ args = parser.parse_args()
 
 global_threshold_correction = args.threshold_correction
 
-for chip in board_info_map['pcb-1']['chip_list']:
+board_info = json.load(open(args.board,'r'))
+
+for chip in board_info['chip_set']:
     if (not args.chip) or chip[0] in args.chip:
         command = ('python check_channel_sensitivity.py '
                    '-o %s '
