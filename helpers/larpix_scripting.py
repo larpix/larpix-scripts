@@ -10,7 +10,7 @@ def clear_buffer_quick(controller, run_time=0.05):
 
 def clear_buffer(controller, run_time=0.05, attempts=40):
     '''
-    Ping serial comms until buffer is empty or until a number of attempts is reached, 
+    Ping serial comms until buffer is empty or until a number of attempts is reached,
     whichever is sooner.
     '''
     clear_buffer_attempts = attempts
@@ -65,9 +65,10 @@ def enforce_chip_configuration(controller):
         attempt += 1
         log.info('enforcing chip configurations - attempt: %d' % attempt)
         for chip_id in different_registers:
+            # FIX ME: this should both get chip io chain info
+            # and write only to different registers
             chip = controller.get_chip(chip_id, 0)
-            for register in different_registers[chip_id]:
-                controller.write_configuration(chip, register)
+            controller.write_configuration(chip)
         clear_buffer(controller)
         config_ok, different_registers = verify_chip_configuration(controller)
     if not config_ok:
