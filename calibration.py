@@ -36,11 +36,12 @@ def good_bins(values, step=1, min_v=None, max_v=None):
     bins = np.linspace(min_v-step, max_v+step, nsteps)
     return bins
 
-def integral_within_range((dist, bin_edges), x_low, x_high, moment=0):
+def integral_within_range(hist, x_low, x_high, moment=0):
     '''
     Calculates the integral ``x^m * f(x) dx`` of the distribution within a range
     Assumes a uniform distribution within bins
     '''
+    dist, bin_edges = hist
     sum = 0.
     low_bin = np.digitize(x_low, bin_edges)-1
     high_bin = np.digitize(x_high, bin_edges)-1
@@ -59,10 +60,11 @@ def integral_within_range((dist, bin_edges), x_low, x_high, moment=0):
         sum += dist[bin] * ((bin_edges[bin+1] + bin_edges[bin])/2)**moment
     return sum
 
-def find_fwhm((dist, bin_edges), max_bin):
+def find_fwhm(hist, max_bin):
     '''
     Returns the linear interpolated half max values above and below the specified bin
     '''
+    dist, bin_edges = hist
     hm_bin_high = max_bin
     hm_bin_low = max_bin
     max = dist[max_bin]
@@ -81,11 +83,12 @@ def find_fwhm((dist, bin_edges), max_bin):
     hm_low = np.interp(hm, yp, xp)
     return (hm_low, hm_high)
 
-def get_peak_values((dist, bin_edges)):
+def get_peak_values(hist):
     '''
     Returns the peak value, the mean value within the fwhm of peak, and the sigma of the
     peak (calculated from fwhm)
     '''
+    dist, bin_edges = hist
     max_bin = np.argmax(dist)
     max_x = bin_edges[max_bin]
     max_y = dist[max_bin]
@@ -118,7 +121,7 @@ def extract_chip_channel_ids(filename, max_trans=None, verbose=False):
         if verbose and loop_data['n_trans'] % 100 == 0:
             print('trans: %d, trans_cut: %d, packets: %d, packets_cut: %d\r' %
                   (loop_data['n_trans'], loop_data['n_trans_cut'], loop_data['n_packets'],
-                   loop_data['n_packets_cut'])),
+                   loop_data['n_packets_cut']), end='')
             sys.stdout.flush()
         if not is_good_data(curr_trans):
             loop_data['n_trans_cut'] += 1
@@ -160,7 +163,7 @@ def extract_chip_rel_timing(filename, verbose=False, max_trans=None):
         if verbose and loop_data['n_trans'] % 100 == 0:
             print('trans: %d, trans_cut: %d, packets: %d, packets_cut: %d\r' %
                   (loop_data['n_trans'], loop_data['n_trans_cut'], loop_data['n_packets'],
-                   loop_data['n_packets_cut'])),
+                   loop_data['n_packets_cut']), end='')
             sys.stdout.flush()
         if curr_trans['block_type'] is 'data' and curr_trans['data_type'] is 'write':
             chips_silenced = True # assumes first write is a silence command
@@ -228,7 +231,7 @@ def extract_adc_dist(filename, adc_max=256, adc_min=0, adc_step=2, max_trans=Non
         if verbose and loop_data['n_trans'] % 100 == 0:
             print('trans: %d, trans_cut: %d, packets: %d, packets_cut: %d\r' %
                   (loop_data['n_trans'], loop_data['n_trans_cut'], loop_data['n_packets'],
-                   loop_data['n_packets_cut'])),
+                   loop_data['n_packets_cut']), end='')
             sys.stdout.flush()
         if curr_trans['block_type'] is 'data' and curr_trans['data_type'] is 'write':
             chips_silenced = True # assumes first write is a silence command
