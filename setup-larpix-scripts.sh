@@ -11,7 +11,7 @@ if [ ! -z "$1" ]
     python_command="
 from helpers.pathnames import make_default_board;
 from time import localtime;
-print make_default_board(localtime(), '$1', force=True)"
+print(make_default_board(localtime(), '$1', force=True))"
     echo $python_command | python
 fi
 
