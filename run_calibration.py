@@ -35,7 +35,7 @@ from larpix.larpix import Controller
 from sys import exit
 import os
 import json
-import calibration
+import helpers.calibration as calibration
 parse = Controller.parse_input
 
 def update_cal_data(cal_data, new_cal_data):
