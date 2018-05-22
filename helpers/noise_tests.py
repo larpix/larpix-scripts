@@ -1500,16 +1500,16 @@ def noise_test_internal_pulser(board='pcb-5', chip_idx=0, n_pulses=1000,
         time.sleep(csa_recovery_time)
         try:
             dac_level -= pulse_dac
-            result = controller.issue_testpulse(chip_id=chip.chip_id, pulse_dac=pulse_dac,
-                                                min_dac = testpulse_dac_min)
+            result += [controller.issue_testpulse(chip_id=chip.chip_id, pulse_dac=pulse_dac,
+                                                  min_dac = testpulse_dac_min)]
         except ValueError:
             dac_level = testpulse_dac_max
             controller.enable_testpulse(chip_id=chip.chip_id, channel_list=[pulse_channel],
                                         start_dac=testpulse_dac_max)
             time.sleep(reset_dac_time)
             print('reset DAC value')
-            result = controller.issue_testpulse(chip_id=chip.chip_id, pulse_dac=pulse_dac,
-                                                min_dac = testpulse_dac_min)
+            result += [controller.issue_testpulse(chip_id=chip.chip_id, pulse_dac=pulse_dac,
+                                                  min_dac = testpulse_dac_min)]
         if len(result) - 32 > 0:
             extra += 1
         elif len(result) - 32 < 0:
@@ -1529,7 +1529,6 @@ def noise_test_internal_pulser(board='pcb-5', chip_idx=0, n_pulses=1000,
     #controller.write_configuration(chip,range(38,42)) # monitor
 
     # Keep a handle to chip data, and return
-    result = controller.reads
     flush_logger()
     if close_controller:
         controller.serial_close()
