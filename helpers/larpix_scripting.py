@@ -112,9 +112,9 @@ def load_chip_configurations(controller, board, config_path, silence=False,
                                      chip_identifier)
                 log.info('%s-%d-c%d config loaded' % chip_identifier)
             except IOError as error:
-                log.warn('%s-%d-c%d config not found' % chip_identifier)
+                #log.warn('%s-%d-c%d config not found' % chip_identifier)
                 if not default_config is None:
-                    log.info('loading %s' % default_config)
+                    #log.info('loading %s' % default_config)
                     try:
                         chip.config.load(default_config)
                         log.info('%s-%d-c%d default config loaded' % chip_identifier)
