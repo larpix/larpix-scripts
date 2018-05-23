@@ -49,7 +49,7 @@ parser.add_argument('--min_dac_amp', default=0, type=int,
                     help='(optional, default: %(default)s)')
 parser.add_argument('--n_pulses', default=10, type=int,
                     help='(optional, default: %(default)s)')
-parser.add_argument(,'-s','--configuration_file', default=None,
+parser.add_argument('-s','--configuration_file', default=None,
                     help='initial chip configuration file to load '
                     'by default will look in %s for individual chip configurations, '
                     'if chip config not found, will load %s, '

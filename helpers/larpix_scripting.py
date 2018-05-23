@@ -121,6 +121,9 @@ def load_chip_configurations(controller, board, config_path, silence=False,
                     except IOError as error:
                         log.exception(error)
                         log.error('no default config found!')
+                else:
+                    log.info('disabling %s-%d-c%d' % chip_identifier)
+                    controller.disable(chip_id=chip.chip_id, io_chain=chip.io_chain)
             controller.write_configuration(chip)
             if silence:
                 controller.disable(chip_id=chip.chip_id, io_chain=chip.io_chain)

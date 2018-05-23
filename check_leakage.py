@@ -28,7 +28,7 @@ start_time = time.localtime()
 default_config = 'physics.json'
 
 parser = argparse.ArgumentParser()
-parser.add_argument(,'-b','--board', default=pathnames.default_board_file(start_time),
+parser.add_argument('-b','--board', default=pathnames.default_board_file(start_time),
                     help='input file containing chipset info (optional, default: '
                     '%(default)s)')
 parser.add_argument('-o','--outdir', default=pathnames.default_script_logdir(start_time),

@@ -1469,6 +1469,10 @@ def noise_test_internal_pulser(board='pcb-5', chip_idx=0, n_pulses=1000,
     # Get chip under test
     chip = controller.chips[chip_idx]
     print('initial configuration for chip %d' % chip.chip_id)
+    # Save current configuration in a temporary file
+    temp_filename = '.config_%s.json' % time.strftime('%Y_%m_%d_%H_%M_%S',time.localtime())
+    print('temporarily storing previous configuration: %s' % temp_filename)
+    chip.config.write(temp_filename,force=True)
     # Configure chip for pulsing one channel
     controller.enable_testpulse(chip_id=chip.chip_id, channel_list=[pulse_channel],
                                  start_dac = testpulse_dac_max)
@@ -1514,20 +1518,15 @@ def noise_test_internal_pulser(board='pcb-5', chip_idx=0, n_pulses=1000,
             extra += 1
         elif len(result) - 32 < 0:
             lost += 1
-        print('pulse: %4d, received: %4d, DAC: %4d' % (pulse_idx, len(result), dac_level))
+        print('pulse: %4d, received: %4d, DAC: %4d' % (pulse_idx, len(result[-1]), dac_level))
 
     # Reset DAC level, and disconnect channel
     controller.disable_testpulse()
-    chip.config.csa_testpulse_dac_amplitude = 0
-    controller.write_configuration(chip,46) # dac amplitude
-    chip.config.cross_trigger_mode = 0
-    chip.config.global_threshold = 255
-    controller.write_configuration(chip,[32,47]) # global threshold / xtrig
-    chip.config.pixel_trim_thresholds = [16] * 32
-    controller.write_configuration(chip,range(32)) # trim
-    #chip.config.disable_analog_monitor()
-    #controller.write_configuration(chip,range(38,42)) # monitor
-
+    chip.config.load(temp_filename)
+    controller.write_configuration(chip)
+    os.remove(temp_filename)
+    if not controller.verify_configuration(chip_id=chip.chip_id)[0]:
+        print('  warning: could not verify original chip state')
     # Keep a handle to chip data, and return
     flush_logger()
     if close_controller:

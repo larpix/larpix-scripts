@@ -22,5 +22,5 @@ for chip in board_info['chip_set']:
     if (not args.chip) or chip[0] in args.chip:
         command = ('python check_leakage.py -o %s -v --chips %d' % 
                    (pathnames.default_script_logdir(start_time), chip[0]))
-        print command
+        print(command)
         system(command)

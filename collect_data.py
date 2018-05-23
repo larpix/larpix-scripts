@@ -51,6 +51,7 @@ try:
         log.info('storing...')
         sl.flush_datalog()
         log.info('done')
+        log.info('rate: %.2f Hz' % (len(controller.reads[-1])/args.run_time))
         controller.reads = []
 
     log.info('end of run %s' % sl.data_logfile)

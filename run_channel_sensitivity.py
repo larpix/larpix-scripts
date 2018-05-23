@@ -15,10 +15,10 @@ parser.add_argument('-b', '--board', type=str,
 parser.add_argument('-c', '--chip', type=int, nargs='*',
         help='The chip ID(s) to measure', default=[])
 parser.add_argument('-t', '--threshold-correction', type=int,
-        help='The global threshold correction', default=1)
+        help='The global threshold correction (default: %(default)s)', default=1)
 parser.add_argument('-s', '--config', required=False,
                     default=pathnames.default_config_dir(start_time),
-        help='The configuration to load onto the chip(s)')
+        help='The configuration to load onto the chip(s) (default: %(default)s)')
 args = parser.parse_args()
 
 global_threshold_correction = args.threshold_correction
@@ -34,5 +34,5 @@ for chip in board_info['chip_set']:
                    '-v --chips %d' % (pathnames.default_script_logdir(start_time),
                                       global_threshold_correction, args.config,
                                       chip[0]))
-        print command
+        print(command)
         system(command)

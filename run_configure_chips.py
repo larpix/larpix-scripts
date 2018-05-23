@@ -23,6 +23,6 @@ for chip in board_info['chip_set']:
         command = ('python configure_chips.py '
                    '-o %s -v --chips %d' % (pathnames.default_script_logdir(start_time),
                                             chip[0]))
-        print command
+        print(command)
         system(command)
                
