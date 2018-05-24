@@ -180,10 +180,11 @@ try:
                             'adc_sqsum' : packet.dataword**2
                             }
             for channel in sorted(channel_results.keys()):
-                chip_results['adc_mean'][channel] = channel_results[channel]['adc_sum'] \
-                    / channel_results[channel]['n']
+                chip_results['adc_mean'][channel] = float(\
+                    channel_results[channel]['adc_sum']) / channel_results[channel]['n']
                 chip_results['adc_rms'][channel] = math.sqrt(\
-                    channel_results[channel]['adc_sqsum'] / channel_results[channel]['n'] \
+                    float(channel_results[channel]['adc_sqsum'])\
+                        / channel_results[channel]['n'] \
                         - chip_results['adc_mean'][channel]**2)
                 log.info('%d-c%d-ch%d adc mean: %.2f, adc rms: %.2f' % (\
                         chip.io_chain, chip.chip_id, channel, \
