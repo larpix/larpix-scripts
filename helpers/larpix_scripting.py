@@ -39,14 +39,14 @@ def npackets_by_channel(packets, chip_id):
     except KeyError:
         return [0]*32
 
-def verify_chip_configuration(controller):
+def verify_chip_configuration(controller, chip_id=None):
     '''Checks that configurations on physical chips matches those in controller.chips.'''
     clear_buffer(controller)
-    config_ok, different_registers = controller.verify_configuration()
+    config_ok, different_registers = controller.verify_configuration(chip_id=chip_id)
     if not config_ok:
         log.info('chip configurations were not verified - retrying')
         clear_buffer(controller)
-        config_ok, different_registers = controller.verify_configuration()
+        config_ok, different_registers = controller.verify_configuration(chip_id=chip_id)
         if not config_ok:
             log.warn('chip configurations could not be verified')
             log.warn('different registers: %s' % str(different_registers))
