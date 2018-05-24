@@ -59,17 +59,17 @@ parser.add_argument('-s','--configuration_file', default=None,
                     '(optional)' % (pathnames.default_config_dir(start_time),
                                     pathnames.default_config_file(start_time),
                                     default_config))
-parser.add_argument('--threshold_rate', default=5, type=float,
+parser.add_argument('--threshold_rate', default=0.9, type=float,
                     help='target per channel trigger rate - configuration guarantees '
-                    '< threshold_rate Hz/channel of triggers '
+                    '< threshold_rate or < 1/run_time Hz/channel of triggers, '
+                    'whichever is larger '
                     '(optional, units: Hz, default: %(default)s)')
 parser.add_argument('--max_rate', default=20, type=float,
                     help='maximum per channel trigger rate - configuration will disable '
                     'channels with >= max_rate Hz of triggers at start and end of scan '
                     '(optional, units: Hz, default: %(default)s)')
 parser.add_argument('-t','--run_time', default=1, type=float,
-                    help='read time for calculating trigger rate - recommended that run_time '
-                    '> 1/threshold_rate '
+                    help='read time for calculating trigger rate '
                     '(optional, units: sec, default: %(default)s)')
 parser.add_argument('--quick_run_time', default=0.1, type=float,
                     help='read time for calculating trigger rate on initial quick threshold '

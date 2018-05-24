@@ -57,23 +57,31 @@ def enforce_chip_configuration(controller):
     Checks that configurations match those on physical chips.
     If not, attempt to reload configurations that do not match.
     '''
+    error_flag = False
     max_attempts = 5
-    attempt = 0
     clear_buffer(controller)
     config_ok, different_registers = verify_chip_configuration(controller)
-    while not config_ok and attempt < max_attempts:
-        attempt += 1
-        log.info('enforcing chip configurations - attempt: %d' % attempt)
-        for chip_id in different_registers:
-            # FIX ME: this should both get chip io chain info
-            # and write only to different registers
-            chip = controller.get_chip(chip_id, 0)
-            controller.write_configuration(chip)
-        clear_buffer(controller)
-        config_ok, different_registers = verify_chip_configuration(controller)
     if not config_ok:
-        log.error('could not enforce configurations')
-        log.info('different registers: %s' % str(different_registers))
+        for chip_id in different_registers:
+            config_ok = False
+            attempt = 0
+            while not config_ok and attempt < max_attempts:
+                attempt += 1
+                log.info('enforcing chip %d configuration - attempt: %d' % (chip_id, attempt))
+                # FIX ME: this should both get chip io chain info
+                # and write only to different registers
+                chip = controller.get_chip(chip_id, 0)
+                controller.write_configuration(chip)
+                clear_buffer(controller)
+                config_ok = verify_chip_configuration(controller,
+                                                      chip_id=chip_id)[0]
+            if not config_ok:
+                log.error('could not enforce configuration on chip %d' % chip_id)
+                error_flag = True
+    if error_flag:
+        log.error('Not all chip configurations were successful')
+        config_ok, different_registers = verify_chip_configuration(controller)
+        log.error('Different registers: %s' % str(different_registers))
     return config_ok, different_registers
 
 def load_board(controller, infile):
