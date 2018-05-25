@@ -4,6 +4,11 @@ import larpix.larpix as larpix
 from helpers.script_logging import ScriptLogger
 log = ScriptLogger.get_script_log()
 
+def clear_stored_packets(controller):
+    for chip in controller.chips:
+        chip.reads = []
+    controller.reads = []
+
 def clear_buffer_quick(controller, run_time=0.05):
     '''Open serial comms for run_time seconds'''
     controller.run(run_time,'clear buffer (quick)')

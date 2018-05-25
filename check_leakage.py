@@ -112,6 +112,7 @@ try:
                                                             trim=pixel_trim,
                                                             run_time=run_time)
             board_results += [chip_results]
+            larpix_scripting.clear_stored_packets(controller)
             finish_time = time.time()
             if verbose:
                 log.debug('%d-c%d leakage test took %.2f s' % \

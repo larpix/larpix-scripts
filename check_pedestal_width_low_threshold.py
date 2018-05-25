@@ -105,6 +105,7 @@ try:
                                                                     global_threshold,
                                                                 run_time=run_time)
             board_results += [chip_results[1:]]
+            larpix_scripting.clear_stored_packets(controller)
             finish_time = time.time()
             if verbose:
                 log.debug('%d-c%d pedestal scan took %.2f s' % \
