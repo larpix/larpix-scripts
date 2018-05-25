@@ -27,16 +27,20 @@ def npackets_by_channel(packets, chip_id):
     return npackets
 
 def npackets_by_chip_channel(packets):
-    npackets = [[0]*32]*256
+    npackets = {}
     for packet in packets:
-        npackets[packet.chipid][packet.channel_id] += 1
+        try:
+            npackets[packet.chipid][packet.channel_id] += 1
+        except KeyError:
+            npackets[packet.chipid] = [0]*32
+            npackets[packet.chipid][packet.channel_id] += 1
     return npackets
 
 def clear_buffer_quick(controller):
     controller.run(0.05,'clear buffer (quick)')
 
 def clear_buffer(controller):
-    buffer_clear_attempts = 5
+    buffer_clear_attempts = 40
     clear_buffer_quick(controller)
     while len(controller.reads[-1]) > 0 and buffer_clear_attempts > 0:
         clear_buffer_quick(controller)
@@ -159,7 +163,7 @@ try:
     controller.disable()
     clear_buffer(controller)
 
-    verify_chip_configuration(controller)
+    #verify_chip_configuration(controller)
 
     chip_configurations = []
     try:
@@ -176,11 +180,11 @@ try:
             controller.write_configuration(chip, modified_registers)
         # Check for high rate channels
         high_threshold_channels = {}
-        for chip in controller.chips:
+        for chip in reversed(controller.chips):
             chip_id = chip.chip_id
             high_threshold_channels[chip_id] = set()
             if chips_to_scan is None:
-                controller.enable()
+                controller.enable(chip_id=chip_id)
             elif chip_id in chips_to_scan:
                 controller.enable(chip_id=chip_id)
 
@@ -191,10 +195,11 @@ try:
             log.info('check rate on chips')
             controller.write_configuration(chip0, range(10), write_read=run_time,
                                            message='rate check')
+            controller.disable()
             npackets = npackets_by_chip_channel(controller.reads[-1])
             for chip in controller.chips:
                 chip_id = chip.chip_id
-                if sum(npackets[chip_id]) <= 0:
+                if not chip_id in npackets.keys():
                     continue
                 log.info('c%d-%d has a rate of %.2f Hz' % \
                              (chip_id, io_chain, sum(npackets[chip_id])/run_time))
@@ -205,16 +210,22 @@ try:
                                          (chip_id, io_chain, channel, npacket/run_time))
                         high_threshold_channels[chip_id].add(channel)
                         break_flag = False
-                log.info('disable c%d-%d channels %s' % \
-                             (chip_id, io_chain, str(high_threshold_channels[chip_id])))
-                controller.disable(chip_id=chip_id,
-                                   channel_list=list(high_threshold_channels[chip_id]),
-                                   io_chain=io_chain)
+            for chip in reversed(controller.chips):
+                chip_id = chip.chip_id
+                controller.enable(chip_id=chip_id,
+                                  channel_list=range(32),
+                                  io_chain=io_chain)
+                if len(high_threshold_channels[chip_id]) > 0:
+                    log.info('disable c%d-%d channels %s' % \
+                                 (chip_id, io_chain, str(high_threshold_channels[chip_id])))
+                    controller.disable(chip_id=chip_id,
+                                       channel_list=list(high_threshold_channels[chip_id]),
+                                       io_chain=io_chain)
         for chip in controller.chips:
             chip_id = chip.chip_id
             if len(high_threshold_channels[chip_id]):
                 log.info('c%d-%d channels with threshold above %d: %s' % \
-                             (chip_id, io_chain, global_threshold,
+                             (chip_id, io_chain, global_threshold_max,
                               str(high_threshold_channels[chip_id])))
 
         # Perform quick global threshold scan to determine highest channel threshold
@@ -228,7 +239,7 @@ try:
             repeat_flag = False
             clear_buffer(controller)
             modified_registers = [32]
-            for chip in controller.chips:
+            for chip in reversed(controller.chips):
                 chip_id = chip.chip_id
                 if not scan_complete[chip_id]:
                     global_threshold[chip_id] = test_threshold
@@ -242,7 +253,7 @@ try:
             npackets = npackets_by_chip_channel(packets)
             for chip in controller.chips:
                 chip_id = chip.chip_id
-                if sum(npackets[chip_id]) <= 0:
+                if not chip_id in npackets.keys():
                     continue
                 log.info('threshold %d - chip rate %.2f Hz' % \
                              (global_threshold[chip_id], \
@@ -294,8 +305,8 @@ try:
             npackets = npackets_by_chip_channel(packets)
             for chip in controller.chips:
                 chip_id = chip.chip_id
-                if any([npacket > threshold_rate * run_time
-                        for npacket in npackets[chip_id]]):
+                if chip_id in npackets.keys() and any([npacket > threshold_rate * run_time
+                                                       for npacket in npackets[chip_id]]):
                     global_threshold[chip_id] += global_threshold_step
                     log.info('threshold %d - chip rate %.2f Hz' % \
                                  (global_threshold[chip_id], sum(npackets[chip_id])/run_time))
@@ -481,7 +492,7 @@ try:
     npackets = npackets_by_chip_channel(controller.reads[-1])
     for chip in controller.chips:
         chip_id = chip.chip_id
-        if chip_id in range(len(npackets)):
+        if chip_id in npackets.keys():
             log.info('%s-c%d rate: %.2f Hz' % \
                          (board_info, chip_id, sum(npackets[chip_id])/run_time))
             for channel in range(32):
