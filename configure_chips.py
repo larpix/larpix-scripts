@@ -132,6 +132,7 @@ try:
                 if not chip_id in chips_to_scan:
                     log.info('skipping %d-c%d' % chip_info)
                     continue
+
             global_threshold = global_threshold_max
             chip.config.global_threshold = global_threshold
             pixel_trims = [pixel_trim_max]*32
@@ -334,6 +335,7 @@ try:
             # Disable chip for rest of loop
             controller.disable(chip_id=chip_id, io_chain=io_chain)
             log.info('%d-c%d configuration complete' % chip_info)
+            larpix_scripting.clear_stored_packets(controller)
             finish_time = time.time()
             if verbose:
                 log.debug('%d-c%d configuration took %.2f s' % \

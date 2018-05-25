@@ -193,6 +193,7 @@ try:
 
             board_results += [chip_results]
             controller.disable(chip_id=chip_id, io_chain=io_chain)
+            larpix_scripting.clear_stored_packets(controller)
             finish_time = time.time()
             if verbose:
                 log.debug('%d-c%d pedestal scan took %.2f s' % \

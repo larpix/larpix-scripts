@@ -16,10 +16,10 @@ print(make_default_board(localtime(), '$1', force=True))"
 fi
 
 echo "creating aliases..."
-alias larpix-check-pedestal="python $LARPIX_SCRIPT_DIR/run_pedestal_scan.py"
-alias larpix-check-leakage="python $LARPIX_SCRIPT_DIR/run_leakage.py"
-alias larpix-configure="python $LARPIX_SCRIPT_DIR/run_configure_chips.py"
-alias larpix-check-sensitivity="python $LARPIX_SCRIPT_DIR/run_channel_sensitivity.py"
+alias larpix-check-pedestal="python $LARPIX_SCRIPT_DIR/check_pedestal_width_low_threshold.py"
+alias larpix-check-leakage="python $LARPIX_SCRIPT_DIR/check_leakage.py"
+alias larpix-configure="python $LARPIX_SCRIPT_DIR/configure_chips.py"
+alias larpix-check-sensitivity="python $LARPIX_SCRIPT_DIR/check_channel_sensitivity.py"
 alias larpix-run="python $LARPIX_SCRIPT_DIR/collect_data.py"
 
 echo "done"
