@@ -98,6 +98,17 @@ def load_board(controller, infile):
         controller.chips.append(larpix.Chip(chip_id, io_chain))
     return chip_set['board']
 
+def store_chip_configurations(controller, board_info, outdir, force=False):
+    '''
+    Stores chip configurations in specified directory
+    '''
+    config = larpix.Configuration()
+    for chip in controller.chips:
+        config.from_dict(chip.config.to_dict())
+        configuration_file = outdir + '/%s-%d-c%d_config.json' % (board_info, chip.io_chain, chip.chip_id)
+        config.write(configuration_file, force=force)
+        log.info('configuration saved to ' + configuration_file)
+
 def load_chip_configurations(controller, board, config_path, silence=False,
                              default_config=None, threshold_correction=0,
                              trim_correction=0):

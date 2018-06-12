@@ -27,13 +27,20 @@ parser.add_argument('--global_threshold_correction', default=0, required=False,
                     ' files (default: %(default)s)')
 parser.add_argument('--trim_correction', default=0, required=False, type=int,
                     help='Global adjustment to pixel trims (default: %(default)s)')
+parser.add_argument('-i','--interactive', action='store_true', help='Run in interactive mode allowing access to '
+                    'controller and chip configurations') ## implement this
 args = parser.parse_args()
+if args.interactive:
+    from helpers.pixel_report import *
+    from larpix_scripting import store_chip_configurations
 
 sl = ScriptLogger(start_time)
 log = sl.script_log
 log.info('arguments: %s' % str(args))
 
 last_read = []
+controller = None # keep handle to some variables in case you want to enter an interactive session
+board_info = None
 try:
     controller = larpix.Controller(timeout=0.01)
     board_info = larpix_scripting.load_board(controller, args.board)
@@ -73,8 +80,11 @@ try:
         controller.reads = []
 
     log.info('end of run %s' % sl.data_logfile)
-    import pixel_report
-    pixel_report.pixel_report(last_read)
+    if args.interactive:
+        pixel_report(last_read)
+        log.info('entering interactive session')
+    else:
+        sys.exit(0)
 except Exception as error:
     log.exception(error)
     log.error('run encountered an error')
@@ -83,3 +93,4 @@ except Exception as error:
     log.info('done')
 
     log.info('run closed abnormally: %s' % sl.data_logfile)
+    sys.exit(1)

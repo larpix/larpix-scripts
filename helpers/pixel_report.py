@@ -60,4 +60,4 @@ def pixel_report(packets):
     '''Run the pixel report'''
     results = pixel_check(packets)
     print_pixel_report(results)
-    return
+    return results
