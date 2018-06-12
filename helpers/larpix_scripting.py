@@ -99,7 +99,8 @@ def load_board(controller, infile):
     return chip_set['board']
 
 def load_chip_configurations(controller, board, config_path, silence=False,
-                             default_config=None):
+                             default_config=None, threshold_correction=0,
+                             trim_correction=0):
     '''
     Disables chips, then loads specified configurations onto chips in reverse
     daisy chain order.
@@ -113,6 +114,13 @@ def load_chip_configurations(controller, board, config_path, silence=False,
         for chip in reversed(controller.chips):
             chip_identifier = (board, chip.io_chain, chip.chip_id)
             chip.config.load(config_path)
+            chip.config.global_threshold += threshold_correction
+            for channel in range(32):
+                if (chip.config.pixel_trim_thresholds[channel] + trim_correction
+                    <= 31):
+                    chip.config.pixel_trim_thresholds[channel] += trim_correction
+                else:
+                    chip.config.pixel_trim_thresholds[channel] = 31
             controller.write_configuration(chip)
             if silence:
                 controller.disable(chip_id=chip.chip_id, io_chain=chip.io_chain)
@@ -130,6 +138,7 @@ def load_chip_configurations(controller, board, config_path, silence=False,
                     #log.info('loading %s' % default_config)
                     try:
                         chip.config.load(default_config)
+
                         log.info(('%s-%d-c%d default config '+default_config+' loaded') % 
                                  chip_identifier)
                     except IOError as error:
@@ -138,8 +147,16 @@ def load_chip_configurations(controller, board, config_path, silence=False,
                 else:
                     log.info('disabling %s-%d-c%d' % chip_identifier)
                     controller.disable(chip_id=chip.chip_id, io_chain=chip.io_chain)
+            chip.config.global_threshold += threshold_correction
+            for channel in range(32):
+                if (chip.config.pixel_trim_thresholds[channel] + trim_correction
+                    <= 31):
+                    chip.config.pixel_trim_thresholds[channel] += trim_correction
+                else:
+                    chip.config.pixel_trim_thresholds[channel] = 31
             controller.write_configuration(chip)
             if silence:
                 controller.disable(chip_id=chip.chip_id, io_chain=chip.io_chain)
     else: raise IOError('specified configuration not found')
-    return enforce_chip_configuration(controller)
+    return verify_chip_configuration(controller)
+    #return enforce_chip_configuration(controller)

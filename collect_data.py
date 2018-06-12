@@ -25,36 +25,56 @@ parser.add_argument('--global_threshold_correction', default=0, required=False,
                     type=int,
                     help='Adjustment on global threshold from values in config'
                     ' files (default: %(default)s)')
+parser.add_argument('--trim_correction', default=0, required=False, type=int,
+                    help='Global adjustment to pixel trims (default: %(default)s)')
 args = parser.parse_args()
 
 sl = ScriptLogger(start_time)
 log = sl.script_log
 log.info('arguments: %s' % str(args))
 
+last_read = []
 try:
     controller = larpix.Controller(timeout=0.01)
     board_info = larpix_scripting.load_board(controller, args.board)
     controller.disable()
     config_ok, different_registers = larpix_scripting.load_chip_configurations(
-        controller, board_info, args.config)
+        controller, board_info, args.config,
+        threshold_correction=args.global_threshold_correction,
+        trim_correction=args.trim_correction)
 
-    if not args.global_threshold_correction == 0:
-        for chip in controller.chips:
-            chip.config.global_threshold += args.global_threshold_correction
-            controller.write_configuration(chip,32)
+    for chip in controller.chips:
+        chip.config.external_trigger_mask[7] = 0
+        #chip.config.adc_burst_length = 3
+        #controller.write_configuration(chip,51)
+        controller.write_configuration(chip,range(56,60))
+    
+    #if not args.global_threshold_correction == 0:
+    #    for chip in controller.chips:
+    #        chip.config.global_threshold += args.global_threshold_correction
+    #        controller.write_configuration(chip,32)
 
     for _ in range(args.subruns):
         specifier = time.strftime('%Y_%m_%d_%H_%M_%S')
         log.info('begin collect_data_%s' % specifier)
         controller.run(args.run_time,'collect_data_%s' % specifier)
+        last_read = controller.reads[-1]
         log.info('end collect_data_%s' % specifier)
         log.info('storing...')
         sl.flush_datalog()
         log.info('done')
         log.info('rate: %.2f Hz' % (len(controller.reads[-1])/args.run_time))
+        #npackets = larpix_scripting.npackets_by_chip_channel(packets)
+        #for chip_id in npackets.keys():
+        #    for channel,npacket in enumerate(npackets[chip_id]):
+        #        log.info('c%d-ch%d rate: %.2f Hz' % (chip_id, channel,
+        #                                             float(npacket) / args.run_time))
+        larpix_scripting.clear_stored_packets(controller)
         controller.reads = []
 
     log.info('end of run %s' % sl.data_logfile)
+    import pixel_report
+    pixel_report.pixel_report(last_read)
 except Exception as error:
     log.exception(error)
     log.error('run encountered an error')
