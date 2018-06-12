@@ -28,7 +28,8 @@ parser.add_argument('--global_threshold_correction', default=0, required=False,
 parser.add_argument('--trim_correction', default=0, required=False, type=int,
                     help='Global adjustment to pixel trims (default: %(default)s)')
 parser.add_argument('-i','--interactive', action='store_true', help='Run in interactive mode allowing access to '
-                    'controller and chip configurations') ## implement this
+                    'controller and chip configurations')
+parser.add_argument('-v','--verbose',  action='store_true')
 args = parser.parse_args()
 if args.interactive:
     from helpers.pixel_report import *
@@ -52,15 +53,8 @@ try:
 
     for chip in controller.chips:
         chip.config.external_trigger_mask[7] = 0
-        #chip.config.adc_burst_length = 3
-        #controller.write_configuration(chip,51)
         controller.write_configuration(chip,range(56,60))
     
-    #if not args.global_threshold_correction == 0:
-    #    for chip in controller.chips:
-    #        chip.config.global_threshold += args.global_threshold_correction
-    #        controller.write_configuration(chip,32)
-
     for _ in range(args.subruns):
         specifier = time.strftime('%Y_%m_%d_%H_%M_%S')
         log.info('begin collect_data_%s' % specifier)
@@ -71,11 +65,12 @@ try:
         sl.flush_datalog()
         log.info('done')
         log.info('rate: %.2f Hz' % (len(controller.reads[-1])/args.run_time))
-        #npackets = larpix_scripting.npackets_by_chip_channel(packets)
-        #for chip_id in npackets.keys():
-        #    for channel,npacket in enumerate(npackets[chip_id]):
-        #        log.info('c%d-ch%d rate: %.2f Hz' % (chip_id, channel,
-        #                                             float(npacket) / args.run_time))
+        if args.verbose:
+            npackets = larpix_scripting.npackets_by_chip_channel(last_read)
+            for chip_id in npackets.keys():
+                for channel,npacket in enumerate(npackets[chip_id]):
+                    log.info('c%d-ch%d rate: %.2f Hz' % (chip_id, channel,
+                                                         float(npacket) / args.run_time))
         larpix_scripting.clear_stored_packets(controller)
         controller.reads = []
 
