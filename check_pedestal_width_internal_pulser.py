@@ -132,15 +132,16 @@ try:
             log.info('checking for high rate channels (rate > %.2fHz)' % max_rate)
             high_threshold_channels = set()
             break_flag = False
-            run_time = 0.5
+            run_time = 1.0
             while not break_flag:
                 break_flag = True
                 larpix_scripting.clear_buffer(controller)
+                log.info('check rate')
                 controller.run(run_time,'rate check')
                 npackets = larpix_scripting.npackets_by_channel(controller.reads[-1],
                                                                 chip_id=chip_id)
                 for channel,npacket in enumerate(npackets):
-                    rate = npacket / run_time
+                    rate = float(npacket) / run_time
                     if rate > max_rate:
                         log.warning('high rate on c%d-ch%d (%.2f Hz)' % (\
                                 chip_id, channel, rate))
