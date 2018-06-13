@@ -6,6 +6,8 @@ import helpers.pathnames as pathnames
 import helpers.larpix_scripting as larpix_scripting
 from larpix.quickstart import *
 from helpers.script_logging import ScriptLogger
+from helpers.pixel_report import *
+from helpers.larpix_scripting import store_chip_configurations
 
 start_time = time.localtime()
 
@@ -29,11 +31,14 @@ parser.add_argument('--trim_correction', default=0, required=False, type=int,
                     help='Global adjustment to pixel trims (default: %(default)s)')
 parser.add_argument('-i','--interactive', action='store_true', help='Run in interactive mode allowing access to '
                     'controller and chip configurations')
-parser.add_argument('-v','--verbose',  action='store_true')
+parser.add_argument('-v','--verbose',action='store_true', help='Increase verbosity')
 args = parser.parse_args()
 if args.interactive:
-    from helpers.pixel_report import *
-    from larpix_scripting import store_chip_configurations
+    from subprocess import run
+    command = [arg for arg in sys.argv if not arg in ['-i','--interactive']]
+    command = ['python','-i'] + command
+    run(command)
+    sys.exit(0)
 
 sl = ScriptLogger(start_time)
 log = sl.script_log
@@ -75,11 +80,8 @@ try:
         controller.reads = []
 
     log.info('end of run %s' % sl.data_logfile)
-    if args.interactive:
-        pixel_report(last_read)
-        log.info('entering interactive session')
-    else:
-        sys.exit(0)
+    pixel_report(last_read)
+
 except Exception as error:
     log.exception(error)
     log.error('run encountered an error')

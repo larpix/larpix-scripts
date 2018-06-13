@@ -137,7 +137,7 @@ try:
             chip.config.global_threshold = global_threshold
             pixel_trims = [pixel_trim_max]*32
             chip.config.pixel_trim_thresholds = pixel_trims
-            modified_registers = range(32) + [32]
+            modified_registers = list(range(32)) + [32]
             controller.write_configuration(chip, modified_registers)
             # Check for high rate channels
             controller.enable(chip_id=chip_id, io_chain=io_chain)

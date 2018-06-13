@@ -20,6 +20,6 @@ alias larpix-check-pedestal="python $LARPIX_SCRIPT_DIR/check_pedestal_width_low_
 alias larpix-check-leakage="python $LARPIX_SCRIPT_DIR/check_leakage.py"
 alias larpix-configure="python $LARPIX_SCRIPT_DIR/configure_chips.py"
 alias larpix-check-sensitivity="python $LARPIX_SCRIPT_DIR/check_channel_sensitivity.py"
-alias larpix-run="python -i $LARPIX_SCRIPT_DIR/collect_data.py"
+alias larpix-run="python $LARPIX_SCRIPT_DIR/collect_data.py"
 
 echo "done"

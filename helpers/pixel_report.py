@@ -8,7 +8,7 @@ def pixel_check(packets):
             continue
         chip_id = pkt.chipid
         chip_result = None
-        if results.has_key(chip_id):
+        if chip_id in results.keys():
             chip_result = results[chip_id]
         else:
             chip_result = {'chip_id': chip_id,
@@ -28,7 +28,7 @@ def pixel_check(packets):
         chip_result['n_hits'][chan_id] += 1
         chip_result['mean_adc'][chan_id] += pkt.dataword
     # Convert ADC sum to ADC mean
-    for chip_id, result in results.iteritems():
+    for chip_id, result in list(results.items()):
         for chan_id in range(32):
             if result['n_hits'][chan_id] > 0:
                 result['mean_adc'][chan_id] /= float(result['n_hits'][chan_id])
@@ -37,23 +37,23 @@ def pixel_check(packets):
 def print_pixel_report(results):
     '''Print the results the pixel check'''
     chip_ids = sorted(results.keys())
-    print 'ID bad_parity n_hits mean_adc fifo_half fifo_full'
+    print('ID bad_parity n_hits mean_adc fifo_half fifo_full')
     for chip_id in chip_ids:
         result = results[chip_id]
-        print 'Chip %d:  Total hits = %d  (bad_parity=%d fifo_half=%d fifo_full=%d)' % (
-            chip_id,
-            sum(result['n_hits']),
-            result['bad_parity'],
-            result['fifo_half'],
-            result['fifo_full'])
-        print '  chan n_hits mean_adc'
+        print('Chip %d:  Total hits = %d  (bad_parity=%d fifo_half=%d fifo_full=%d)' % (
+                chip_id,
+                sum(result['n_hits']),
+                result['bad_parity'],
+                result['fifo_half'],
+                result['fifo_full']))
+        print('  chan n_hits mean_adc')
         for chan_id in range(32):
             if result['n_hits'][chan_id] == 0:
                 # Skip quiet channels
                 continue
-            print '  %d %d %0.2f' % (chan_id,
+            print('  %d %d %0.2f' % (chan_id,
                                      result['n_hits'][chan_id],
-                                     result['mean_adc'][chan_id])
+                                     result['mean_adc'][chan_id]))
     return
 
 def pixel_report(packets):
