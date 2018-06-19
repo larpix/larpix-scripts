@@ -1,5 +1,5 @@
 from larpix.analyzers import LogAnalyzer
-from larpix.larpix import Packet
+import larpix.larpix as larpix
 from larpix.Timestamp import Timestamp
 import numpy as np
 import argparse
@@ -19,7 +19,7 @@ def is_good_data(trans):
     return True
 
 def is_good_packet(packet):
-    if packet.packet_type != Packet.DATA_PACKET: return False
+    if packet.packet_type != larpix.Packet.DATA_PACKET: return False
     if packet.has_valid_parity() is False: return False
     return True
 
@@ -212,8 +212,12 @@ def extract_chip_rel_timing(filename, verbose=False, max_trans=None):
             loop_data['n_packets'], loop_data['n_packets_cut']))
     return rel_offset
 
-def extract_adc_dist(filename, adc_max=256, adc_min=0, adc_step=2, max_trans=None,
-                     verbose=False):
+def extract_pulsed_adc_dist(filename, adc_max=256, adc_min=0, adc_step=2, max_trans=None,
+                            verbose=False):
+    '''
+    Extracts adc distributions for each chip and channel excluding hits from channels that
+    were issued test pulses
+    '''
     la = LogAnalyzer(filename)
     adc_dist = {}
     loop_data = {
@@ -223,6 +227,8 @@ def extract_adc_dist(filename, adc_max=256, adc_min=0, adc_step=2, max_trans=Non
         'n_packets_cut': 0
         }
     chips_silenced = False # cuts out all data before first write command
+    chip_conf = {} # keep track of chip configuration commands sent
+    pulsed_chip_channels = {} # keeps track of channels with test pulser enabled
     while True:
         curr_trans = la.next_transmission()
         if curr_trans is None: break
@@ -235,6 +241,29 @@ def extract_adc_dist(filename, adc_max=256, adc_min=0, adc_step=2, max_trans=Non
             sys.stdout.flush()
         if curr_trans['block_type'] is 'data' and curr_trans['data_type'] is 'write':
             chips_silenced = True # assumes first write is a silence command
+
+            testpulse_conf_flag = False # marks if testpulse enable configuration has changed
+            for packet_idx, packet in enumerate(curr_trans['packets']):
+                if packet.packet_type == larpix.Packet.CONFIG_READ_PACKET:
+                    continue
+                # update configuration with new packets
+                packet_dict = {packet.register_address: packet.register_data}
+                try:
+                    chip_conf[packet.chipid].from_dict_registers(packet_dict)
+                except KeyError:
+                    chip_conf[packet.chipid] = larpix.Configuration()
+                    chip_conf[packet.chipid].from_dict_registers(packet_dict)
+
+                if packet.register_address in larpix.Configuration.csa_testpulse_enable_addresses:
+                    # change test pulse configuration
+                    testpulse_conf_flag = True
+                    pulsed_chip_channels = {} # reset pulsed channels
+            if testpulse_conf_flag:
+                for chipid, conf in chip_conf.items():
+                    if any([value == 0 for value in conf.csa_testpulse_enable]):
+                        pulsed_chip_channels[chipid] = [channel
+                                                        for channel, value in enumerate(conf.csa_testpulse_enable)
+                                                        if value == 0]
         if not is_good_data(curr_trans):
             loop_data['n_trans_cut'] += 1
             continue
@@ -244,6 +273,10 @@ def extract_adc_dist(filename, adc_max=256, adc_min=0, adc_step=2, max_trans=Non
         loop_data['n_packets'] += len(curr_trans['packets'])
         for packet in curr_trans['packets']:
             if not is_good_packet(packet):
+                loop_data['n_packets_cut'] += 1
+                continue
+            if (packet.chipid in pulsed_chip_channels.keys() and
+                packet.channel_id in pulsed_chip_channels[packet.chipid]):
                 loop_data['n_packets_cut'] += 1
                 continue
             chip_id = str(packet.chipid)
@@ -283,7 +316,7 @@ def do_pedestal_calibration(infile, vref=None, vcm=None, verbose=False):
     if verbose:
         print('Begin pedestal calibration')
         print('Extracting data from %s' % infile)
-    adc_dist = extract_adc_dist(infile, adc_max, adc_min, adc_step, verbose=verbose)
+    adc_dist = extract_pulsed_adc_dist(infile, adc_max, adc_min, adc_step, verbose=verbose)
 
     for chipid in adc_dist:
         for channelid in adc_dist[chipid]:

@@ -159,7 +159,7 @@ try:
                     controller=controller, chip_idx=chip_idx, threshold=global_threshold,
                     reset_dac_time=reset_dac_time, csa_recovery_time=csa_recovery_time,
                     pulse_dac=pulse_dac, n_pulses=int(n_pulses/2),
-                    pulse_channel=pulse_channel_0,
+                    pulse_channel=pulse_channel,
                     reset_cycles=chip.config.reset_cycles,
                     testpulse_dac_max=testpulse_dac_max,
                     testpulse_dac_min=testpulse_dac_min, trim=pulse_channel_trim)
