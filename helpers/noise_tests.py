@@ -29,14 +29,14 @@ def pulse_channel(controller, chip_idx=0, pulse_channel=0, n_pulses=100,
     controller.write_configuration(chip,[42,43,44,45])
     #
     # Pulse chip n times
-    controller.run(0.2, 'clear buffer')
+    larpix_scripting.clear_buffer(controller)
     for pulse_idx in range(n_pulses):
         if dac_level < (testpulse_dac_min + pulse_dac):
             # Reset DAC level if it is too low to issue pulse
             chip.config.csa_testpulse_dac_amplitude = testpulse_dac_max
             controller.write_configuration(chip,46)
             time.sleep(0.5) # Settle CSA
-            controller.run(0.2, 'clear buffer')
+            larpix_scripting.clear_buffer(controller)
             print('  Reset DAC value')
             dac_level = testpulse_dac_max
         # Issue pulse
@@ -68,7 +68,7 @@ def check_chip_status(controller, chip_idx=0, channel_ids = range(32),
     chip.config.global_threshold = global_thresh
     controller.write_configuration(chip, 32)
     # Clear buffer
-    controller.run(0.2, 'clear buffer')
+    larpix_scripting.clear_buffer(controller)
     # Check each channel
     for chanid in channel_ids:
         print('')
@@ -76,7 +76,7 @@ def check_chip_status(controller, chip_idx=0, channel_ids = range(32),
         chip.config.channel_mask[chanid] = 0 # Enable channel
         controller.write_configuration(chip, range(52,56))
         # Read to check that noise level is managable
-        controller.run(0.2, 'clear buffer')
+        larpix_scripting.clear_buffer(controller)
         controller.run(0.2, 'noise check chan = %d' % chanid)
         n_noise_packets = len(controller.reads[-1])
         # Pulse check
@@ -103,7 +103,7 @@ def test_digital_pickup(controller=None, board='pcb-1', chip_idx=0,
         close_controller = True
         controller = quickcontroller(board)
         controller.disable()
-        controller.run(2,'clear buffer')
+        larpix_scripting.clear_buffer(controller)
         config_ok, different_registers = controller.verify_configuration()
         if config_ok:
             print('  new controller created')
@@ -113,9 +113,7 @@ def test_digital_pickup(controller=None, board='pcb-1', chip_idx=0,
     chip = controller.chips[chip_idx]
     chip_id = chip.chip_id
     # Save current configuration in a temporary file
-    temp_filename = '.config_%s.json' % time.strftime('%Y_%m_%d_%H_%M_%S',time.localtime())
-    print('temporarily storing previous configuration: %s' % temp_filename)
-    chip.config.write(temp_filename,force=True)
+    temp_file = larpix_scripting.temp_store_config(chip)
     # Set up chips for testing
     print('setting up chip...')
     controller.disable(chip_id=chip_id)
@@ -124,7 +122,6 @@ def test_digital_pickup(controller=None, board='pcb-1', chip_idx=0,
     registers_to_write = range(33) + [52,53,54,55]
     controller.write_configuration(chip, registers_to_write)
     controller.enable(chip_id=chip_id, channel_list=[channel])
-    controller.run(0.1,'clear buffer')
     results = {'trim': [],
                'sent': [],
                'recieved': [],
@@ -139,7 +136,7 @@ def test_digital_pickup(controller=None, board='pcb-1', chip_idx=0,
         n_sent_packets = 0
         n_in_window_packets = 0
         n_out_window_packets = 0
-        controller.run(0.1,'clear buffer')
+        larpix_scripting.clear_buffer(controller)
         for test_idx in range(n_tests):    
             controller.write_configuration(controller.all_chips[0],
                                            range(n_test_packets),
@@ -160,12 +157,7 @@ def test_digital_pickup(controller=None, board='pcb-1', chip_idx=0,
         results['ref'] += [n_out_window_packets]
         results['gen_frac'] += [gen_fraction]
     # Return chip to original state
-    controller.disable(chip_id=chip.chip_id)
-    chip.config.load(temp_filename)
-    controller.write_configuration(chip)
-    os.remove(temp_filename)
-    if not controller.verify_configuration(chip_id=chip.chip_id)[0]:
-        print('  warning: could not verify original chip state')
+    config_ok, diff_registers = larpix_scripting.load_temp_file(controller, chip, temp_file)
     if close_controller:
         controller.serial_close()
     return results
@@ -204,7 +196,7 @@ def find_channel_thresholds(controller=None, board='pcb-1', chip_idx=0,
         close_controller = True
         controller = quickcontroller(board)
         controller.disable()
-        controller.run(2,'clear buffer')
+        larpix_scripting.clear_buffer(controller)
         config_ok, different_registers = controller.verify_configuration()
         if config_ok:
             print('  new controller created')
@@ -225,7 +217,7 @@ def find_channel_thresholds(controller=None, board='pcb-1', chip_idx=0,
     chip.config.reset_cycles = reset_cycles
     registers_to_write = range(33) + [52,53,54,55] + [60,61,62]
     controller.write_configuration(chip, registers_to_write)
-    controller.run(2,'clear buffer')
+    larpix_scripting.clear_buffer(controller)
     config_ok, different_registers = controller.verify_configuration(chip_id=chip_id)
     if not config_ok:
         print('  configuration error')
@@ -249,7 +241,7 @@ def find_channel_thresholds(controller=None, board='pcb-1', chip_idx=0,
             break
         print('  disabling')
         controller.disable(chip_id=chip_id, channel_list=high_rate_channels)
-        controller.run(2,'clear buffer')
+        larpix_scripting.clear_buffer(controller)
     if len(high_rate_channels) > 0:
         high_rate_channels = list(high_rate_channels)
         print('  disabled high rate channels: %s' % str(high_rate_channels))
@@ -279,7 +271,7 @@ def find_channel_thresholds(controller=None, board='pcb-1', chip_idx=0,
     controller.write_configuration(chip, 32)
     while True:
         print('checking rate with coarse threshold of %d' % coarse_threshold)
-        controller.run(2,'clear buffer')
+        larpix_scripting.clear_buffer(controller)
         controller.run(run_time,'check rate')
         packets_by_channel = [0]*32
         for packet in controller.reads[-1]:
@@ -327,7 +319,7 @@ def find_channel_thresholds(controller=None, board='pcb-1', chip_idx=0,
     controller.write_configuration(chip, range(32))
     while True:
         print('checking rate with trim configuration')
-        controller.run(2,'clear buffer')
+        larpix_scripting.clear_buffer(controller)
         controller.run(run_time,'check rate')
         packets_by_channel = [0]*32
         for packet in controller.reads[-1]:
@@ -352,7 +344,7 @@ def find_channel_thresholds(controller=None, board='pcb-1', chip_idx=0,
         controller.write_configuration(chip, range(32))
 
     # Pulse channels to test sensitivity
-    controller.run(2,'clear buffer')
+    larpix_scripting.clear_buffer(controller)
     controller.run(run_time,'check rate')
     channel_rate = [0]*32
     for packet in controller.reads[-1]:
@@ -443,7 +435,7 @@ def simultaneous_scan_trim(controller=None, board='pcb-5', chip_idx=0,
     controller.read_configuration(chip)
     print('  set mask')
     # Prepare to scan
-    controller.run(5,'clear buffer')
+    larpix_scripting.clear_buffer(controller)
     n_packets = []
     adc_means = []
     adc_rmss = []
@@ -464,14 +456,14 @@ def simultaneous_scan_trim(controller=None, board='pcb-5', chip_idx=0,
         controller.write_configuration(chip,range(0,32))
         print('    set trim %d' % next_trim)
         print('    clear buffer (quick)')
-        controller.run(0.1,'clear buffer')
+        larpix_scripting.clear_buffer(controller)
         del controller.reads[-1]
         #if threshold == thresholds[0]:
         if len(controller.reads) > 0 and len(controller.reads[-1]) > 0:
         #if True:
             # Flush buffer for first cycle
             print('    clear buffer (slow)')
-            controller.run(2,'clear buffer')
+            larpix_scripting.clear_buffer(controller)
         controller.reads = []
         # Collect data
         print('    reading')
@@ -556,7 +548,7 @@ def simultaneous_scan_trim_with_communication(controller=None, board='pcb-5', ch
     chip.config.global_threshold = global_threshold
     chip.config.disable_channels()
     controller.write_configuration(chip,range(52,56))
-    controller.run(0.1,'clear buffer')
+    larpix_scripting.clear_buffer(controller)
     chip.config.enable_channels(channel_list)
     chip.config.reset_cycles = reset_cycles
     print('  writing config')
@@ -566,7 +558,7 @@ def simultaneous_scan_trim_with_communication(controller=None, board='pcb-5', ch
     controller.read_configuration(chip)
     print('  set mask')
     # Prepare to scan
-    controller.run(5,'clear buffer')
+    larpix_scripting.clear_buffer(controller)
     n_packets = []
     adc_means = []
     adc_rmss = []
@@ -588,14 +580,14 @@ def simultaneous_scan_trim_with_communication(controller=None, board='pcb-5', ch
         controller.write_configuration(chip,range(0,32))
         print('    set trim %d' % next_trim)
         print('    clear buffer (quick)')
-        controller.run(0.1,'clear buffer')
+        larpix_scripting.clear_buffer(controller)
         del controller.reads[-1]
         #if threshold == thresholds[0]:
         if len(controller.reads) > 0 and len(controller.reads[-1]) > 0:
         #if True:
             # Flush buffer for first cycle
             print('    clear buffer (slow)')
-            controller.run(2,'clear buffer')
+            larpix_scripting.clear_buffer(controller)
         controller.reads = []
         # Collect data
         print('    writing and reading')
@@ -690,7 +682,7 @@ def scan_trim(controller=None, board='pcb-5', chip_idx=0, channel_list=range(32)
         # Scan from high to low
         trims.reverse()
         # Prepare to scan
-        controller.run(5,'clear buffer')
+        larpix_scripting.clear_buffer(controller)
         n_packets = []
         adc_means = []
         adc_rmss = []
@@ -700,7 +692,7 @@ def scan_trim(controller=None, board='pcb-5', chip_idx=0, channel_list=range(32)
             controller.write_configuration(chip,range(0,32))
             print('    set threshold')
             print('    clear buffer (quick)')
-            controller.run(0.1,'clear buffer')
+            larpix_scripting.clear_buffer(controller)
             del controller.reads[-1]
             #if threshold == thresholds[0]:
             if len(controller.reads) > 0 and len(controller.reads[-1]) > 0:
@@ -708,7 +700,7 @@ def scan_trim(controller=None, board='pcb-5', chip_idx=0, channel_list=range(32)
                 # Flush buffer for first cycle
                 print('    clearing buffer')
                 time.sleep(0.2)
-                controller.run(2,'clear buffer')
+                larpix_scripting.clear_buffer(controller)
                 time.sleep(0.2)
             controller.reads = []
             # Collect data
@@ -785,7 +777,7 @@ def quick_scan_threshold(controller=None, board='pcb-5', chip_idx=0,
     registers_to_write = [32] + [52,53,54,55] + [60,61,62]
     controller.write_configuration(chip, registers_to_write)
     print('  clear buffer')
-    controller.run(2,'clear buffer')
+    larpix_scripting.clear_buffer(controller)
     # Check for noisy channels
     print('  noise check')
     controller.run(run_time,'noise')
@@ -801,7 +793,7 @@ def quick_scan_threshold(controller=None, board='pcb-5', chip_idx=0,
     print('    disabling')
     chip.config.disable_channels(noisy_channels)
     controller.write_configuration(chip, [52,53,54,55])
-    controller.run(1,'clear buffer')
+    larpix_scripting.clear_buffer(controller)
     print('proceeding with scan')
     results = {}
     for channel in channel_list:
@@ -819,14 +811,14 @@ def quick_scan_threshold(controller=None, board='pcb-5', chip_idx=0,
         chip.config.global_threshold = threshold
         controller.write_configuration(chip, 32)
         print('    clear buffer (quick)')
-        controller.run(0.1,'clear buffer')
+        larpix_scripting.clear_buffer(controller)
         #if threshold == thresholds[0]:
         if len(controller.reads) > 0 and len(controller.reads[-1]) > 0:
         #if True:
             # Flush buffer for first cycle
             print('    clear buffer (slow)')
             time.sleep(0.2)
-            controller.run(2,'clear buffer')
+            larpix_scripting.clear_buffer(controller)
             time.sleep(0.2)
         controller.reads = []
         # Collect data
@@ -948,7 +940,7 @@ def scan_threshold(controller=None, board='pcb-5', chip_idx=0,
             controller.write_configuration(chip,32)
             print('    set threshold')
             print('    clear buffer (quick)')
-            controller.run(0.1,'clear buffer')
+            larpix_scripting.clear_buffer(controller)
             del controller.reads[-1]
             #if threshold == thresholds[0]:
             if len(controller.reads) > 0 and len(controller.reads[-1]) > 0:
@@ -956,7 +948,7 @@ def scan_threshold(controller=None, board='pcb-5', chip_idx=0,
                 # Flush buffer for first cycle
                 print('    clear buffer (slow)')
                 time.sleep(0.2)
-                controller.run(2,'clear buffer')
+                larpix_scripting.clear_buffer(controller)
                 time.sleep(0.2)
             controller.reads = []
             # Collect data
@@ -1046,7 +1038,7 @@ def scan_threshold_with_communication(controller=None, board='pcb-1', chip_idx=0
             controller.write_configuration(chip,32)
             print('    set threshold')
             print('    clear buffer (quick)')
-            controller.run(0.1,'clear buffer')
+            larpix_scripting.clear_buffer(controller)
             del controller.reads[-1]
             #if threshold == thresholds[0]:
             if len(controller.reads) > 0 and len(controller.reads[-1]) > 0:
@@ -1054,7 +1046,7 @@ def scan_threshold_with_communication(controller=None, board='pcb-1', chip_idx=0
                 # Flush buffer for first cycle
                 print('    clear buffer (slow)')
                 time.sleep(0.2)
-                controller.run(2,'clear buffer')
+                larpix_scripting.clear_buffer(controller)
                 time.sleep(0.2)
             controller.reads = []
             # Collect data
@@ -1122,7 +1114,7 @@ def test_csa_gain(controller=None, chip_idx=0, board='pcb-5', reset_cycles=4096,
     chip.config.adc_burst_length = adc_burst_length
     chip.config.sample_cycles = sample_cycles
     controller.write_configuration(chip, range(33) + [48] + range(60,63))
-    controller.run(1,'clear buffer')
+    larpix_scripting.clear_buffer(controller)
     if not controller.verify_configuration(chip_id=chip.chip_id)[0]:
         print('Warning: chip config does not match readback')
     # Pulse chip,channel
@@ -1143,7 +1135,7 @@ def test_csa_gain(controller=None, chip_idx=0, board='pcb-5', reset_cycles=4096,
         controller.enable_testpulse(chip_id=chip.chip_id, channel_list=channel_list,
                                     start_dac=dac_max)
         time.sleep(csa_recovery_time)
-        controller.run(1,'clear buffer')
+        larpix_scripting.clear_buffer(controller)
         reset_attempts = 0
         pulses_sent = 0
         packets_received = 0
@@ -1160,7 +1152,7 @@ def test_csa_gain(controller=None, chip_idx=0, board='pcb-5', reset_cycles=4096,
                 controller.enable_testpulse(chip_id=chip.chip_id, channel_list=channel_list,
                                             start_dac=dac_max)
                 time.sleep(csa_recovery_time)
-                controller.run(1,'clear buffer')
+                larpix_scripting.clear_buffer(controller)
                 reset_attempts += 1
         if reset_attempts >= 2:
             print('testpulse reset failed - check pulse size and DAC min/max')
@@ -1200,7 +1192,7 @@ def test_testpulse_linearity(controller=None, chip_idx=0, board='pcb-5', reset_c
     chip.config.adc_burst_length = adc_burst_length
     chip.config.sample_cycles = sample_cycles
     controller.write_configuration(chip, range(33) + [48] + range(60,63))
-    controller.run(1,'clear buffer')
+    larpix_scripting.clear_buffer(controller)
     if not controller.verify_configuration(chip_id=chip.chip_id)[0]:
         print('Warning: chip config does not match readback')
     # Pulse chip,channel
@@ -1221,7 +1213,7 @@ def test_testpulse_linearity(controller=None, chip_idx=0, board='pcb-5', reset_c
         controller.enable_testpulse(chip_id=chip.chip_id, channel_list=channel_list,
                                     start_dac=dac_value)
         time.sleep(csa_recovery_time)
-        controller.run(1,'clear buffer')
+        larpix_scripting.clear_buffer(controller)
         reset_attempts = 0
         pulses_sent = 0
         packets_received = 0
@@ -1238,7 +1230,7 @@ def test_testpulse_linearity(controller=None, chip_idx=0, board='pcb-5', reset_c
                 controller.enable_testpulse(chip_id=chip.chip_id, channel_list=channel_list,
                                             start_dac=dac_value)
                 time.sleep(csa_recovery_time)
-                controller.run(1,'clear buffer')
+                larpix_scripting.clear_buffer(controller)
                 reset_attempts += 1
         if reset_attempts >= 2:
             print('testpulse reset failed - check pulse size and DAC min/max')
@@ -1282,7 +1274,7 @@ def test_leakage_current(controller=None, chip_idx=0, board='pcb-5', reset_cycle
         'rate': [],
         }
     print('clear buffer')
-    controller.run(2,'clear buffer')
+    larpix_scripting.clear_buffer(controller)
     del controller.reads[-1]
     for channel in channel_list:
         chip.config.disable_channels()
@@ -1290,7 +1282,7 @@ def test_leakage_current(controller=None, chip_idx=0, board='pcb-5', reset_cycle
         controller.write_configuration(chip,range(52,56))
         # flush buffer
         print('clear buffer')
-        controller.run(0.1,'clear buffer')
+        larpix_scripting.clear_buffer(controller)
         del controller.reads[-1]
         # run for run_time
         print('begin test (runtime = %.1f, channel = %d)' % (run_time, channel))
@@ -1371,14 +1363,14 @@ def noise_test_external_pulser(board='pcb-5', chip_idx=0, run_time=10,
     for channel in channel_list:
         print('test channel %d' % channel)
         print('  clear buffer (slow)')
-        controller.run(1,'clear buffer')
+        larpix_scripting.clear_buffer(controller)
         chip.config.disable_channels()
         chip.config.enable_channels([channel])
         chip.config.disable_external_trigger()
         chip.config.enable_external_trigger([channel])
         controller.write_configuration(chip,range(52,60))
         print('  clear buffer (quick)')
-        controller.run(0.1,'clear buffer')
+        larpix_scripting.clear_buffer(controller)
         print('  run')
         controller.run(run_time,'collect data')
         adc_values[channel] = [packet.dataword for packet in controller.reads[-1]
@@ -1486,7 +1478,7 @@ def noise_test_internal_pulser(board='pcb-5', chip_idx=0, n_pulses=1000,
     lost = 0
     extra = 0
     print('clear buffer')
-    controller.run(0.1, 'clear buffer')
+    larpix_scripting.clear_buffer(controller)
     del controller.reads[-1]
     time.sleep(csa_recovery_time)
     result = []
@@ -1540,7 +1532,7 @@ def scan_threshold_with_pulse(controller=None, board='pcb-1', chip_idx=0,
         controller = quickcontroller(board)
         disable_chips(controller)
     chip = controller.chips[chip_idx]
-    controller.run(5, 'clear buffer')
+    larpix_scripting.clear_buffer(controller)
     results = {}
     for channel_idx, channel in enumerate(channel_list):
         print('configuring chip %d channel %d' % (chip.chip_id, channel))
@@ -1555,7 +1547,7 @@ def scan_threshold_with_pulse(controller=None, board='pcb-1', chip_idx=0,
         chip.config.disable_channels()
         chip.config.enable_channels([channel])
         controller.write_configuration(chip,[52,53,54,55])
-        controller.run(5, 'clear buffer')
+        larpix_scripting.clear_buffer(controller)
         thresholds = []
         efficiencies = []
         for threshold in range(threshold_max, threshold_min-1, -threshold_step):
@@ -1565,7 +1557,7 @@ def scan_threshold_with_pulse(controller=None, board='pcb-1', chip_idx=0,
             chip.config.reset_cycles = reset_cycles
             controller.write_configuration(chip,range(60,63)) # reset cycles
             controller.write_configuration(chip,[32,47]) # global threshold / xtrig
-            controller.run(0.1, 'clear buffer')
+            larpix_scripting.clear_buffer(controller)
             pulses_issued = 0
             triggers_received = 0
             dac_level = testpulse_dac_max
@@ -1576,7 +1568,7 @@ def scan_threshold_with_pulse(controller=None, board='pcb-1', chip_idx=0,
                     chip.config.csa_testpulse_dac_amplitude = testpulse_dac_max
                     controller.write_configuration(chip,46)
                     time.sleep(0.1) # Wait for front-end to settle
-                    controller.run(0.1, 'clear buffer')
+                    larpix_scripting.clear_buffer(controller)
                     dac_level = testpulse_dac_max
                 # Issue pulse
                 dac_level -= dac_pulse  # Negative DAC step mimics electron arrival
@@ -1625,7 +1617,7 @@ def scan_trim_with_pulse(controller=None, board='pcb-1', chip_idx=0,
         controller = quickcontroller(board)
         disable_chips(controller)
     chip = controller.chips[chip_idx]
-    controller.run(5, 'clear buffer')
+    larpix_scripting.clear_buffer(controller)
     results = {}
     for channel_idx, channel in enumerate(channel_list):
         print('configuring chip %d channel %d' % (chip.chip_id, channel))
@@ -1643,7 +1635,7 @@ def scan_trim_with_pulse(controller=None, board='pcb-1', chip_idx=0,
         # Set threshold
         chip.config.global_threshold = threshold
         controller.write_configuration(chip,[32])
-        controller.run(5, 'clear buffer')
+        larpix_scripting.clear_buffer(controller)
         trims = []
         efficiencies = []
         for trim in range(trim_max, trim_min-1, -trim_step):
@@ -1654,7 +1646,7 @@ def scan_trim_with_pulse(controller=None, board='pcb-1', chip_idx=0,
             controller.write_configuration(chip,range(32)) # trim
             controller.write_configuration(chip,range(60,63)) # reset cycles
             controller.write_configuration(chip,[32,47]) # global threshold / xtrig
-            controller.run(0.1, 'clear buffer')
+            larpix_scripting.clear_buffer(controller)
             pulses_issued = 0
             triggers_received = 0
             dac_level = testpulse_dac_max
@@ -1665,7 +1657,7 @@ def scan_trim_with_pulse(controller=None, board='pcb-1', chip_idx=0,
                     chip.config.csa_testpulse_dac_amplitude = testpulse_dac_max
                     controller.write_configuration(chip,46)
                     time.sleep(0.1) # Wait for front-end to settle
-                    controller.run(0.1, 'clear buffer')
+                    larpix_scripting.clear_buffer(controller)
                     dac_level = testpulse_dac_max
                 # Issue pulse
                 dac_level -= dac_pulse  # Negative DAC step mimics electron arrival
@@ -1738,7 +1730,7 @@ def test_min_signal_amplitude(controller=None, board='pcb-1', chip_idx=0,
             # Step over a range of dac_amplitudes
             print('  pulse amp: %d' % dac_amp)
             dac_level = max_dac_amp
-            controller.run(0.1, 'clear buffer')
+            larpix_scripting.clear_buffer(controller)
             del controller.reads[-1]
             pulses_issued = 0
             triggers_received = 0
@@ -1748,7 +1740,7 @@ def test_min_signal_amplitude(controller=None, board='pcb-1', chip_idx=0,
                     chip.config.csa_testpulse_dac_amplitude = testpulse_dac_max
                     controller.write_configuration(chip,46)
                     time.sleep(0.1) # Wait for front-end to settle
-                    controller.run(0.1, 'clear buffer')
+                    larpix_scripting.clear_buffer(controller)
                     del controller.reads[-1]
                     dac_level = testpulse_dac_max
                 # Issue pulse

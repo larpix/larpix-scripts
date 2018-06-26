@@ -24,6 +24,32 @@ def clear_buffer(controller, run_time=0.05, attempts=40):
         clear_buffer_quick(controller, run_time)
         clear_buffer_attempts -= 1
 
+def temp_store_config(chip):
+    ''' Save chip configuration to a hidden configuration file '''
+    temp_filename = '.config_%s.json' % time.strftime('%Y_%m_%d_%H_%M_%S',time.localtime())
+    log.info('storing chip {} configuration in temp file {}'.format(chip.chip_id,
+                                                                    temp_filename))
+    chip.config.write(temp_filename, force=True)
+    return temp_filename
+
+def load_temp_file(controller, chip, filename):
+    '''
+    Load chip conf from a hidden configuration file and write to chip. Deletes hidden file
+    when complete
+    '''
+    log.info('loading chip {} configuration from temp file {}'.format(chip.chip_id,
+                                                                      filename))
+    controller.disable(chip_id=chip.chip_id)
+    chip.config.load(filename)
+    controller.write_configuration(chip)
+    config_ok, different_registers = verify_chip_configuration(controller,
+                                                               chip_id=chip.chip_id)
+    if config_ok:
+        os.remove(filename)
+    else:
+        log.warn('chip configuration failed - prior state stored in {}'.format(filename))
+    return config_ok, different_registers
+
 def npackets_by_chip_channel(packets):
     '''Sort through packets, counting the number of packets from each chip id and channel.'''
     npackets = {}
