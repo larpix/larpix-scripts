@@ -7,20 +7,11 @@ from __future__ import absolute_import
 from larpix.quickstart import quickcontroller
 from larpix.quickstart import disable_chips
 from larpix.larpix import (flush_logger, PacketCollection, Configuration)
+import helpers.larpix_scripting as larpix_scripting
 import math
 import time
 import json
 import os
-
-def clear_buffer_quick(controller):
-    controller.run(0.05,'clear buffer (quick)')
-
-def clear_buffer(controller):
-    buffer_clear_attempts = 40 # ~2sec
-    clear_buffer_quick(controller)
-    while len(controller.reads[-1]) > 0 and buffer_clear_attempts > 0:
-        clear_buffer_quick(controller)
-        buffer_clear_attempts -= 1
 
 def pulse_channel(controller, chip_idx=0, pulse_channel=0, n_pulses=100,
                   pulse_dac=6, testpulse_dac_max=235, testpulse_dac_min=40):
@@ -1430,10 +1421,10 @@ def noise_test_low_threshold(board='pcb-5', chip_idx=0, run_time=1,
     std_dev = {}
     for channel in channel_list:
         print('test channel %d' % channel)
-        clear_buffer(controller)
+        larpix_scripting.clear_buffer(controller)
         controller.enable(chip_id=chip.chip_id, io_chain=chip.io_chain,
                           channel_list=[channel])
-        clear_buffer_quick(controller)
+        larpix_scripting.clear_buffer_quick(controller)
         controller.run(run_time,'collect data')
         controller.disable(chip_id=chip.chip_id, io_chain=chip.io_chain)
         adc_values[channel] = [packet.dataword for packet in controller.reads[-1]
