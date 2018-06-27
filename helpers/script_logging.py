@@ -9,7 +9,7 @@ sl.flush_datalog() # store current serial data to file
 ``
 The script log can be accessed from any module via
 ``
-from helpers.logging import ScriptLogger
+from helpers.script_logging import ScriptLogger
 log = ScriptLogger.get_script_log()
 ``
 '''
@@ -21,7 +21,7 @@ import os
 import larpix.larpix as larpix
 import helpers.pathnames as pathnames
 
-class ScriptLogger:
+class ScriptLogger(object):
     script_logging_format = '%(asctime)s %(levelname)s: %(message)s'
     script_log_level = logging.DEBUG
 
@@ -55,7 +55,7 @@ class ScriptLogger:
         self.script_log = self.get_script_log()
         pathnames.mkdir_p(self.script_logdir)
         self.script_log_fhandler = logging.FileHandler(self.script_logfile)
-        self.script_log_shandler = logging.StreamHandler(sys.stdout)
+        self.script_log_shandler = ScriptLogger.init_stream_handler()
         self.script_log_formatter = \
             logging.Formatter(fmt=self.script_logging_format)
         self.script_log_fhandler.setFormatter(self.script_log_formatter)
@@ -68,7 +68,26 @@ class ScriptLogger:
         self.enable_datalog(self.data_logfile)
 
     @classmethod
-    def get_script_log(self):
+    def init_stream_handler(cls):
+        ''' Creates stream handler if it does not exist '''
+        logger = logging.getLogger(pathnames.script_name)
+        shandler = None
+        if not any([isinstance(handler, logging.StreamHandler)
+                    for handler in logger.handlers]):
+            shandler = logger.addHandler(logging.StreamHandler(sys.stdout))
+        else:
+            shandler = [handler for handler in logger.handlers
+                        if isinstance(handler, logging.StreamHandler)][0]
+        return shandler
+
+    @classmethod
+    def get_script_log(cls):
+        '''
+        Gives access to script logger, if no ScriptLogger object has been created
+        only the stdout StreamHandler is initialized
+        Thus a print statement can be replaced with logger.info(<output>)
+        '''
+        cls.init_stream_handler()
         return logging.getLogger(pathnames.script_name)
 
     def enable_datalog(self, filename=None):

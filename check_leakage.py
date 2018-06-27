@@ -41,7 +41,7 @@ parser.add_argument('--global_threshold', default=125, type=int,
                     help='(optional, default: %(default)s)')
 parser.add_argument('--pixel_trim', default=16, type=int,
                     help='(optional, default: %(default)s)')
-parser.add_argument('-t','--run_time', default=1, type=int,
+parser.add_argument('-t','--run_time', default=1, type=float,
                     help='(optional, units: sec,  default: %(default)s)')
 parser.add_argument('-s','--configuration_file', default=None,
                     help='initial chip configuration file to load '
