@@ -19,6 +19,7 @@ def use_quickcontroller(func):
         '''
         If no controller specified, attempts to load quickstart board specified in kwargs
         Passes this controller into function with the keyword 'controller'
+        Frees up serial port after function runs
         '''
         return_value = None
         if not 'controller' in kwargs:
@@ -46,7 +47,7 @@ def use_quickcontroller(func):
 def conserve_config(func):
     def new_func(*args, **kwargs):
         '''
-        Stores chip configuration and reloads when test is complete, requires kwarg
+        Stores chip configuration and reloads when test is complete. Requires kwarg
         'controller' to be passed into function. Default chip to save config for is
         chip_idx = 0.
         Note: If you want to use the use_quickcontroller decorator, they should be called
@@ -58,6 +59,8 @@ def conserve_config(func):
         log.info('helpers.noise_tests.conserve_config START')
         return_value = None
         chip_idx = None
+        if not 'controller' in kwargs:
+            return func(*args, **kwargs)
         if 'chip_idx' in kwargs:
             chip_idx = kwargs['chip_idx']
         else:
@@ -157,6 +160,12 @@ def test_digital_pickup(controller=None, board=None, chip_idx=0,
                         trim_step=1, n_test_packets=10, n_tests=10):
     '''
     Scans trim levels while sending test packets.
+    Results are formatted:
+    { 'trim' : [<list of trim values tested>],
+    'sent' : [<list of number of packets sent to board>],
+    'received' : [<list of number of packets received from board>],
+    'ref' : [<list of number of packets received from board without sending packets>],
+    'gen_frac' : [<list fraction of packets generated per packet sent>] }
     '''
     log.info('begin digital io threshold scan')
     chip = controller.chips[chip_idx]
@@ -200,7 +209,7 @@ def test_digital_pickup(controller=None, board=None, chip_idx=0,
               (n_sent_packets, n_in_window_packets, n_out_window_packets, gen_fraction))
         results['trim'] += [trim]
         results['sent'] += [n_sent_packets]
-        results['recieved'] += [n_in_window_packets]
+        results['received'] += [n_in_window_packets]
         results['ref'] += [n_out_window_packets]
         results['gen_frac'] += [gen_fraction]
     return results
@@ -425,6 +434,18 @@ def simultaneous_scan_trim(controller=None, board=None, chip_idx=0,
                            trim_min=0, trim_max=31, trim_step=1, saturation_level=1000,
                            max_level=1200, reset_cycles = 4096,
                            global_threshold=30, run_time=0.1):
+    '''
+    Performs a trim scan with all channels enabled.
+    Once a channel is saturated, that channel is disabled and the scan continues
+    Results are formatted:
+    { <channel> : {
+        'trims' : [<trims tested on channel>],
+        'npackets' : [<number of packets received during test>],
+        'complete' : [<bool, did the channel saturate during test?>]
+        },
+    ...
+    }
+    '''
     # Get chip under test
     chip = controller.chips[chip_idx]
     # Configure chip for one channel operation
@@ -531,6 +552,17 @@ def simultaneous_scan_trim_with_communication(controller=None, board=None, chip_
                                               saturation_level=10, reset_cycles = 4096,
                                               max_level=100, writes=100,
                                               global_threshold=30, run_time=0.1):
+    '''
+    Scan through trims while transmitting packets through daisy chain
+    Result is formatted as:
+    { <channel> : {
+        'trims' : [<trim values tested on channel>],
+        'npackets' : [<number of packets received in test by channel>],
+        'complete' : [<bool, did the channel saturate during test>]
+        },
+    ...
+    }
+    '''
     # Get chip under test
     chip = controller.chips[chip_idx]
     results = {}
@@ -633,6 +665,16 @@ def simultaneous_scan_trim_with_communication(controller=None, board=None, chip_
 def scan_trim(controller=None, board=None, chip_idx=0, channel_list=range(32),
               trim_min=0, trim_max=31, trim_step=1, saturation_level=1000,
               global_threshold=30, run_time=0.1, reset_cycles=4096):
+    '''
+    Scans through trim levels on each channel until saturation threshold is reached
+    Result is formatted as:
+    { <channel> : [[<list of trim values tested on channel>],
+                [<list of number of packets received>],
+                [<list of mean adc value of packets received from channel>],
+                [<list of rms adc value of packets received from channel>]],
+    ...
+    }
+    '''
     # Get chip under test
     chip = controller.chips[chip_idx]
     results = {}
@@ -724,6 +766,14 @@ def quick_scan_threshold(controller=None, board=None, chip_idx=0,
     '''
     Enable all channels and scan thresholds until one channels reaches saturation
     Disable that channel and continue
+    Result is formatted as:
+    { <channel> : {
+        'threshold' : [<list of thresholds tested on channel>],
+        'npackets' : [<list of number of packets received from channel during test>],
+        'adc_mean' : [<list of mean adc value of packets received from channel>],
+        'adc_rms' : [<list of rms adc value of packets received from channel>] },
+    ...
+    }
     '''
     chip = controller.chips[chip_idx]
     # Begin scan
@@ -848,7 +898,16 @@ def scan_threshold(controller=None, board=None, chip_idx=0,
                    channel_list=range(32), threshold_min_coarse=26,
                    threshold_max_coarse=37, threshold_step_coarse=1,
                    saturation_level=1000, run_time=0.1, reset_cycles=4092):
-    '''Scan the signal rate versus channel threshold'''
+    '''
+    Scan the signal rate versus channel threshold
+    Results are formatted as:
+    { 'channel' : [[<list of thresholds tested on channel>],
+                [<list of number of packets received from channel>],
+                [<list of mean adc value of packets received from channel>],
+                [<list of rms adc value of packets received from channel>]],
+    ...
+    }
+    '''
     # Get chip under test
     chip = controller.chips[chip_idx]
     results = {}
@@ -933,7 +992,16 @@ def scan_threshold_with_communication(controller=None, board=None, chip_idx=0,
                                       channel_list=range(32), threshold_min_coarse=26,
                                       threshold_max_coarse=37, threshold_step_coarse=1,
                                       saturation_level=1000, run_time=0.1):
-    '''Scan the signal rate versus channel threshold while writing to chip registers'''
+    '''
+    Scan the signal rate versus channel threshold while writing to chip registers
+    Results are formatted as:
+    { 'channel' : [[<list of thresholds tested on channel>],
+                [<list of number of packets received from channel>],
+                [<list of mean adc value of packets received from channel>],
+                [<list of rms adc value of packets received from channel>]],
+    ...
+    }
+    '''
     # Get chip under test
     chip = controller.chips[chip_idx]
     results = {}
@@ -1015,7 +1083,10 @@ def test_csa_gain(controller=None, chip_idx=0, board=None, reset_cycles=4096,
                   pulse_dac_end=60, pulse_dac_step=5, n_pulses=10, adc_burst_length=0,
                   channel_list=range(32), dac_max=255, dac_min=0, csa_recovery_time=0.1,
                   sample_cycles=255):
-    '''Pulse channels with increasing pulse sizes'''
+    '''
+    Pulse channels with increasing pulse sizes
+    Does not return results of test (must be analyzed offline)
+    '''
     chip = controller.chips[chip_idx]
     log.info('initial config for chip %d' % chip.chip_id)
     # Set up chip for testing
@@ -1078,7 +1149,10 @@ def test_testpulse_linearity(controller=None, chip_idx=0, board=None, reset_cycl
                              pulse_dac=50, dac_max=255, dac_min=0, dac_step=1,
                              n_pulses=1, adc_burst_length=0, channel_list=range(32),
                              csa_recovery_time=0.1, sample_cycles=255):
-    '''Pulse channels with same pulse size changing the DAC step values'''
+    '''
+    Pulse channels with same pulse size changing the DAC step values
+    Does not return results of test (must be analyzed offline)
+    '''
     chip = controller.chips[chip_idx]
     log.info('initial config for chip %d' % chip.chip_id)
     # Set up chip for testing
@@ -1138,7 +1212,15 @@ def test_testpulse_linearity(controller=None, chip_idx=0, board=None, reset_cycl
 @conserve_config
 def test_leakage_current(controller=None, chip_idx=0, board=None, reset_cycles=None,
                          global_threshold=125, trim=16, run_time=1, channel_list=range(32)):
-    '''Sets chips to high threshold and counts number of triggers'''
+    '''
+    Sets chips to high threshold and counts number of triggers
+    Results are formatted as:
+    { 'channel' : [<list of channels tested>],
+    'n_packets':[<list of number of packets received during test>],
+    'run_time':[<list of run times used during test>],
+    'rate': [<list of n_packets / run_time for each test>],
+    }
+    '''
     chip = controller.chips[chip_idx]
     log.info('initial configuration for chip %d' % chip.chip_id)
     chip.config.global_threshold = global_threshold
@@ -1194,7 +1276,10 @@ def noise_test_all_chips(n_pulses=1000, pulse_channel=0, pulse_dac=6, threshold=
                          controller=None, testpulse_dac_max=235, testpulse_dac_min=40,
                          trim=0, board=None, reset_cycles=4096, csa_recovery_time=0.1,
                          reset_dac_time=1):
-    '''Run noise_test_internal_pulser on all available chips'''
+    '''
+    Run noise_test_internal_pulser on all available chips
+    Results are handle to controller data
+    '''
     for chip_idx in range(len(controller.chips)):
         chip_threshold = threshold
         chip_pulse_dac = pulse_dac
@@ -1217,7 +1302,20 @@ def noise_test_all_chips(n_pulses=1000, pulse_channel=0, pulse_dac=6, threshold=
 def noise_test_external_pulser(board=None, chip_idx=0, run_time=10,
                                channel_list=range(32), global_threshold=200,
                                controller=None, reset_cycles=4096):
-    '''Scan through channels with external trigger enabled - report adc width'''
+    '''
+    Scan through channels with external trigger enabled - report adc width
+    Results are formatted as:
+    ( { <channel> : [<list of all adc values received from channel>],
+        ...
+        },
+    { <channel> : <mean adc value of packets received from channel>,
+        ...
+        },
+    { <channel> : <rms adc value of packets received from channel>,
+        ...
+        }
+    )
+    '''
     # Get chip under test
     chip = controller.chips[chip_idx]
     log.info('initial configuration for chip %d' % chip.chip_id)
@@ -1265,7 +1363,20 @@ def noise_test_external_pulser(board=None, chip_idx=0, run_time=10,
 def noise_test_low_threshold(board=None, chip_idx=0, run_time=1,
                              channel_list=range(32), global_threshold=0,
                              controller=None):
-    '''Scan through channels at low threshold - report adc width'''
+    '''
+    Scan through channels at low threshold - report adc width
+    Results are formatted as:
+    ( { <channel> : [<list of all adc values received from channel>],
+        ...
+        },
+    { <channel> : <mean adc value of packets received from channel>,
+        ...
+        },
+    { <channel> : <rms adc value of packets received from channel>,
+        ...
+        }
+    )
+    '''
     # Get chip under test
     chip = controller.chips[chip_idx]
     log.info('initial configuration for chip %d' % chip.chip_id)
@@ -1305,7 +1416,11 @@ def noise_test_internal_pulser(board=None, chip_idx=0, n_pulses=1000,
                                controller=None, testpulse_dac_max=235,
                                testpulse_dac_min=40, trim=0, reset_cycles=4096,
                                csa_recovery_time=0.1, reset_dac_time=1):
-    '''Use cross-trigger from one channel to evaluate noise on other channels'''
+    '''
+    Use cross-trigger from one channel to evaluate noise on other channels
+    Results are formatted as:
+    [[<list of packets received from testpulse>], ...]
+    '''
     # Get chip under test
     chip = controller.chips[chip_idx]
     log.info('initial configuration for chip %d' % chip.chip_id)
@@ -1369,8 +1484,16 @@ def scan_threshold_with_pulse(controller=None, board=None, chip_idx=0,
                               min_acceptable_efficiency=0.5, n_pulses=100, dac_pulse=6,
                               testpulse_dac_max=235, testpulse_dac_min=229, reset_cycles=4096,
                               threshold_max=40, threshold_min=20, threshold_step=1):
-    ''' Pulse channels with test pulse to determine the minimum threshold for
-    triggering at least a specified efficiency '''
+    '''
+    Pulse channels with test pulse to determine the minimum threshold for
+    triggering at least a specified efficiency
+    Results are formatted as:
+    { <channel> : {
+        'thresholds' : [<list of thresholds tested on channel>],
+        'efficiencies' : [<list of triggering efficiency for testpulse>]},
+    ...
+    }
+    '''
     chip = controller.chips[chip_idx]
     larpix_scripting.clear_buffer(controller)
     results = {}
@@ -1448,8 +1571,16 @@ def scan_trim_with_pulse(controller=None, board=None, chip_idx=0,
                          min_acceptable_efficiency=0.5, n_pulses=100, dac_pulse=6,
                          testpulse_dac_max=235, testpulse_dac_min=229, reset_cycles=4096,
                          trim_max=31, trim_min=0, trim_step=1, threshold=40):
-    ''' Pulse channels with test pulse to determine the minimum trim for
-    triggering at least a specified efficiency '''
+    '''
+    Pulse channels with test pulse to determine the minimum trim for
+    triggering at least a specified efficiency
+    Results are formatted as:
+    { <channel> : {
+        'trims' : [<list of trims tested on channel>],
+        'efficiencies' : [<list of triggering efficiency for testpulse>]},
+    ...
+    }
+    '''
     chip = controller.chips[chip_idx]
     larpix_scripting.clear_buffer(controller)
     results = {}
@@ -1531,8 +1662,16 @@ def test_min_signal_amplitude(controller=None, board=None, chip_idx=0,
                               threshold_trigger_rate=1.0, n_pulses=10, min_dac_amp=0,
                               max_dac_amp=10, dac_step=1, testpulse_dac_max=255,
                               testpulse_dac_min=128, reset_cycles=4096):
-    ''' Pulse channel with increasing pulse sizes to determine the minimum pulse size for
-    triggering at >90% '''
+    '''
+    Pulse channel with increasing pulse sizes to determine the minimum pulse size for
+    triggering at >90%
+    Results are formatted as:
+    { <channel> : {
+        'min_pulse_dac' : <min pulse size to trigger with better than specified efficiency>,
+        'eff' : <trigger efficiency at this pulse size>} },
+    ...
+    }
+    '''
     chip = controller.chips[chip_idx]
     results = {}
     for channel_idx, channel in enumerate(channel_list):
