@@ -13,6 +13,65 @@ import time
 import json
 import os
 
+def use_quickcontroller(func):
+    def new_func(*args, **kwargs):
+        '''
+        If no controller specified, attempts to load quickstart board specified in kwargs
+        Passes this controller into function with the keyword 'controller'
+        '''
+        print('use_quickcontroller START')
+        return_value = None
+        if not 'controller' in kwargs:
+            controller = None
+            if not 'board' in kwargs:
+                controller = quickcontroller()
+            else:
+                board = kwargs['board']
+                controller = quickcontroller(board)
+            try:
+                controller.disable()
+                larpix_scripting.clear_buffer(controller)
+                config_ok, different_registers = controller.verify_configuration()
+
+                return_value = func(controller=controller, *args, **kwargs)
+            finally:
+                controller.serial_close()
+        else:
+            return_value = func(*args, **kwargs)
+        print('use_quickcontroller END')
+        return return_value
+    return new_func
+
+def conserve_config(func):
+    def new_func(*args, **kwargs):
+        '''
+        Stores chip configuration and reloads when test is complete, requires kwarg
+        'controller' to be passed into function. Default chip to save config for is
+        chip_idx = 0.
+        Note: If you want to use the use_quickcontroller decorator, they should be called
+        in the following order:
+        @use_quickcontroller
+        @conserve_config
+        -> use_quickcontroller generates a controller that conserve_config then uses
+        '''
+        print('conserve_config START')
+        return_value = None
+        chip_idx = None
+        if 'chip_idx' in kwargs:
+            chip_idx = kwargs['chip_idx']
+        else:
+            chip_idx = 0
+        controller = kwargs['controller']
+        chip = controller.chips[chip_idx]
+        temp_file = larpix_scripting.temp_store_config(chip)
+        try:
+            return_value = func(*args, **kwargs)
+        finally:
+            larpix_scripting.load_temp_file(controller, chip, temp_file)
+        print('conserve_config END')
+        return return_value
+    return new_func
+
 def pulse_channel(controller, chip_idx=0, pulse_channel=0, n_pulses=100,
                   pulse_dac=6, testpulse_dac_max=235, testpulse_dac_min=40):
     '''Simple script to pulse and then listen to a given channel'''
@@ -90,36 +149,23 @@ def check_chip_status(controller, chip_idx=0, channel_ids = range(32),
         controller.write_configuration(chip, range(52,56))
     return
 
-def test_digital_pickup(controller=None, board='pcb-1', chip_idx=0,
+@use_quickcontroller
+@conserve_config
+def test_digital_pickup(controller=None, board=None, chip_idx=0,
                         channel=0, run_time=0.01, threshold=32, trim_max=31, trim_min=0,
                         trim_step=1, n_test_packets=10, n_tests=10):
     '''
     Scans trim levels while sending test packets.
     '''
     print('begin digital io threshold scan')
-    # Create controller and initialize chips to appropriate state
-    close_controller = False
-    if controller is None:
-        close_controller = True
-        controller = quickcontroller(board)
-        controller.disable()
-        larpix_scripting.clear_buffer(controller)
-        config_ok, different_registers = controller.verify_configuration()
-        if config_ok:
-            print('  new controller created')
-        else:
-            print('  configuration error')
-            print('  different registers: %s' % str(different_registers))
     chip = controller.chips[chip_idx]
     chip_id = chip.chip_id
-    # Save current configuration in a temporary file
-    temp_file = larpix_scripting.temp_store_config(chip)
     # Set up chips for testing
     print('setting up chip...')
     controller.disable(chip_id=chip_id)
     chip.config.global_threshold = threshold
     chip.config.pixel_trim_thresholds[channel] = trim_max
-    registers_to_write = range(33) + [52,53,54,55]
+    registers_to_write = list(range(33)) + [52,53,54,55]
     controller.write_configuration(chip, registers_to_write)
     controller.enable(chip_id=chip_id, channel_list=[channel])
     results = {'trim': [],
@@ -137,7 +183,7 @@ def test_digital_pickup(controller=None, board='pcb-1', chip_idx=0,
         n_in_window_packets = 0
         n_out_window_packets = 0
         larpix_scripting.clear_buffer(controller)
-        for test_idx in range(n_tests):    
+        for test_idx in range(n_tests):
             controller.write_configuration(controller.all_chips[0],
                                            range(n_test_packets),
                                            write_read=run_time)
@@ -149,20 +195,18 @@ def test_digital_pickup(controller=None, board='pcb-1', chip_idx=0,
             n_out_window_packets += len(out_window_packets)
         gen_fraction = float(n_in_window_packets - n_out_window_packets - n_sent_packets) /\
             n_sent_packets
-        print('  sent: %d\tin window: %d\tout of window: %d\tgen fraction: %.3f' % 
+        print('  sent: %d\tin window: %d\tout of window: %d\tgen fraction: %.3f' %
               (n_sent_packets, n_in_window_packets, n_out_window_packets, gen_fraction))
         results['trim'] += [trim]
         results['sent'] += [n_sent_packets]
         results['recieved'] += [n_in_window_packets]
         results['ref'] += [n_out_window_packets]
         results['gen_frac'] += [gen_fraction]
-    # Return chip to original state
-    config_ok, diff_registers = larpix_scripting.load_temp_file(controller, chip, temp_file)
-    if close_controller:
-        controller.serial_close()
     return results
 
-def find_channel_thresholds(controller=None, board='pcb-1', chip_idx=0,
+@use_quickcontroller
+@conserve_config
+def find_channel_thresholds(controller=None, board=None, chip_idx=0,
                             channel_list=range(32), output_directory='.',
                             saturation_level=1, run_time=1, reset_cycles=4096,
                             threshold_min_coarse=20, threshold_max_coarse=40,
@@ -190,32 +234,15 @@ def find_channel_thresholds(controller=None, board='pcb-1', chip_idx=0,
       DAC=``pulse_dac``
     '''
     print('begin threshold scan')
-    # Create controller and initialize chips to appropriate state
-    close_controller = False
-    if controller is None:
-        close_controller = True
-        controller = quickcontroller(board)
-        controller.disable()
-        larpix_scripting.clear_buffer(controller)
-        config_ok, different_registers = controller.verify_configuration()
-        if config_ok:
-            print('  new controller created')
-        else:
-            print('  configuration error')
-            print('  different registers: %s' % str(different_registers))
     chip = controller.chips[chip_idx]
     chip_id = chip.chip_id
-    # Save current configuration in a temporary file
-    temp_filename = '.config_%s.json' % time.strftime('%Y_%m_%d_%H_%M_%S',time.localtime())
-    print('temporarily storing previous configuration: %s' % temp_filename)
-    chip.config.write(temp_filename,force=True)
     # Set up chip configuration
     print('configuring chip %d for scan' % chip_id)
     controller.disable(chip_id=chip_id)
     chip.config.global_threshold = threshold_max_coarse
     chip.config.pixel_trim_thresholds = [trim_max]*32
     chip.config.reset_cycles = reset_cycles
-    registers_to_write = range(33) + [52,53,54,55] + [60,61,62]
+    registers_to_write = list(range(33)) + [52,53,54,55] + [60,61,62]
     controller.write_configuration(chip, registers_to_write)
     larpix_scripting.clear_buffer(controller)
     config_ok, different_registers = controller.verify_configuration(chip_id=chip_id)
@@ -387,38 +414,18 @@ def find_channel_thresholds(controller=None, board='pcb-1', chip_idx=0,
     print('configuration saved: %s' % config_filename)
     return_config = Configuration()
     return_config.load(config_filename)
-
-    # Return chip to original state
-    controller.disable(chip_id=chip.chip_id)
-    chip.config.load(temp_filename)
-    controller.write_configuration(chip)
-    os.remove(temp_filename)
-    if not controller.verify_configuration(chip_id=chip.chip_id)[0]:
-        print('  warning: could not verify original chip state')
-    if close_controller:
-        controller.serial_close()
-
     # Return configuration with appropriate channel mask, threshold, and trims
     return return_config
 
-def simultaneous_scan_trim(controller=None, board='pcb-5', chip_idx=0,
+@use_quickcontroller
+@conserve_config
+def simultaneous_scan_trim(controller=None, board=None, chip_idx=0,
                            channel_list=range(32),
                            trim_min=0, trim_max=31, trim_step=1, saturation_level=1000,
                            max_level=1200, reset_cycles = 4096,
                            global_threshold=30, run_time=0.1):
-    # Create controller and initialize chips to appropriate state
-    close_controller = False
-    if controller is None:
-        close_controller = True
-        controller = quickcontroller(board)
-        disable_chips(controller)
-        print('  created controller')
     # Get chip under test
     chip = controller.chips[chip_idx]
-    # Temporarily store chip configuration
-    temp_filename = '.config_%s.json' % time.strftime('%Y_%m_%d_%H_%M_%S',time.localtime())
-    print('temporarily storing previous configuration: %s' % temp_filename)
-    chip.config.write(temp_filename,force=True)
     # Configure chip for one channel operation
     print('testing chip',chip.chip_id)
     results = {}
@@ -513,36 +520,19 @@ def simultaneous_scan_trim(controller=None, board='pcb-5', chip_idx=0,
         else:
             print('%d %d 0' % (channel, results[channel]['trims'][-1]))
 
-    # Return chip to original state
-    controller.disable(chip_id=chip.chip_id)
-    chip.config.load(temp_filename)
-    controller.write_configuration(chip)
-    os.remove(temp_filename)
-    if not controller.verify_configuration(chip_id=chip.chip_id)[0]:
-        print('  warning: could not verify original chip state')
-    if close_controller:
-        controller.serial_close()
     return results
 
-def simultaneous_scan_trim_with_communication(controller=None, board='pcb-5', chip_idx=0,
+@use_quickcontroller
+@conserve_config
+def simultaneous_scan_trim_with_communication(controller=None, board=None, chip_idx=0,
                                               channel_list=range(32),
                                               trim_min=0, trim_max=31, trim_step=1,
                                               saturation_level=10, reset_cycles = 4096,
                                               max_level=100, writes=100,
                                               global_threshold=30, run_time=0.1):
-    # Create controller and initialize chips to appropriate state
-    close_controller = False
-    if controller is None:
-        close_controller = True
-        controller = quickcontroller(board)
-        disable_chips(controller)
-        print('  created controller')
     # Get chip under test
     chip = controller.chips[chip_idx]
     results = {}
-    global_threshold_orig = chip.config.global_threshold
-    pixel_trim_thresholds_orig = chip.config.pixel_trim_thresholds
-    channel_mask_orig = chip.config.channel_mask[:]
     print('testing chip',chip.chip_id)
     # Configure chip for one channel operation
     chip.config.global_threshold = global_threshold
@@ -635,32 +625,16 @@ def simultaneous_scan_trim_with_communication(controller=None, board='pcb-5', ch
                             'complete':scan_completed[channel]}
     results['disabled_channels'] = disabled_channels
 
-    # Restore original global threshold and channel mask
-    chip.config.pixel_trim_thresholds = pixel_trim_thresholds_orig
-    chip.config.global_threshold = global_threshold_orig
-    controller.write_configuration(chip,range(0,33))
-    chip.config.channel_mask = channel_mask_orig
-    controller.write_configuration(chip,[52,53,54,55])
-    if close_controller:
-        controller.serial_close()
     return results
 
-def scan_trim(controller=None, board='pcb-5', chip_idx=0, channel_list=range(32),
+@use_quickcontroller
+@conserve_config
+def scan_trim(controller=None, board=None, chip_idx=0, channel_list=range(32),
               trim_min=0, trim_max=31, trim_step=1, saturation_level=1000,
               global_threshold=30, run_time=0.1, reset_cycles=4096):
-    # Create controller and initialize chips to appropriate state
-    close_controller = False
-    if controller is None:
-        close_controller = True
-        controller = quickcontroller(board)
-        disable_chips(controller)
-        print('  created controller')
     # Get chip under test
     chip = controller.chips[chip_idx]
     results = {}
-    global_threshold_orig = chip.config.global_threshold
-    pixel_trim_thresholds_orig = chip.config.pixel_trim_thresholds
-    channel_mask_orig = chip.config.channel_mask[:]
     print('testing chip',chip.chip_id)
     for channel in channel_list:
         print('testing channel',channel)
@@ -680,7 +654,7 @@ def scan_trim(controller=None, board='pcb-5', chip_idx=0, channel_list=range(32)
                       trim_max+1,
                       trim_step)
         # Scan from high to low
-        trims.reverse()
+        trims = list(reversed(trims))
         # Prepare to scan
         larpix_scripting.clear_buffer(controller)
         n_packets = []
@@ -738,17 +712,11 @@ def scan_trim(controller=None, board='pcb-5', chip_idx=0, channel_list=range(32)
                                       results[channel][1][-1], results[channel][2][-1],
                                       results[channel][3][-1]))
 
-    # Restore original global threshold and channel mask
-    chip.config.pixel_trim_thresholds = pixel_trim_thresholds_orig
-    chip.config.global_threshold = global_threshold_orig
-    controller.write_configuration(chip,range(0,33))
-    chip.config.channel_mask = channel_mask_orig
-    controller.write_configuration(chip,[52,53,54,55])
-    if close_controller:
-        controller.serial_close()
     return results
 
-def quick_scan_threshold(controller=None, board='pcb-5', chip_idx=0,
+@use_quickcontroller
+@conserve_config
+def quick_scan_threshold(controller=None, board=None, chip_idx=0,
                          channel_list=range(32), threshold_min_coarse=26,
                          threshold_max_coarse=37, threshold_step_coarse=1,
                          saturation_level=1000, run_time=0.1, reset_cycles=4092):
@@ -756,18 +724,7 @@ def quick_scan_threshold(controller=None, board='pcb-5', chip_idx=0,
     Enable all channels and scan thresholds until one channels reaches saturation
     Disable that channel and continue
     '''
-    # Create controller and initialize chips to appropriate state
-    close_controller = False
-    if controller is None:
-        close_controller = True
-        controller = quickcontroller(board)
-        disable_chips(controller)
-        print('created controller')
     chip = controller.chips[chip_idx]
-    # Temporarily store chip configuration
-    temp_filename = '.config_%s.json' % time.strftime('%Y_%m_%d_%H_%M_%S',time.localtime())
-    print('temporarily storing previous configuration: %s' % temp_filename)
-    chip.config.write(temp_filename,force=True)
     # Begin scan
     print('testing chip %d' % chip.chip_id)
     controller.disable(chip_id=chip.chip_id)
@@ -871,15 +828,6 @@ def quick_scan_threshold(controller=None, board='pcb-5', chip_idx=0,
             threshold -= threshold_step_coarse
         if break_flag:
             break
-    # Return chip to original state
-    controller.disable(chip_id=chip.chip_id)
-    chip.config.load(temp_filename)
-    controller.write_configuration(chip)
-    os.remove(temp_filename)
-    if not controller.verify_configuration(chip_id=chip.chip_id)[0]:
-        print('  warning: could not verify original chip state')
-    if close_controller:
-        controller.serial_close()
     print('summary (channel, threshold, npackets, adc mean, adc rms):')
     for channel in channel_list:
         if len(results[channel]['threshold']) > 0:
@@ -893,23 +841,16 @@ def quick_scan_threshold(controller=None, board='pcb-5', chip_idx=0,
                                                      str(noisy_channels)))
     return results
 
-def scan_threshold(controller=None, board='pcb-5', chip_idx=0,
+@use_quickcontroller
+@conserve_config
+def scan_threshold(controller=None, board=None, chip_idx=0,
                    channel_list=range(32), threshold_min_coarse=26,
                    threshold_max_coarse=37, threshold_step_coarse=1,
                    saturation_level=1000, run_time=0.1, reset_cycles=4092):
     '''Scan the signal rate versus channel threshold'''
-    # Create controller and initialize chips to appropriate state
-    close_controller = False
-    if controller is None:
-        close_controller = True
-        controller = quickcontroller(board)
-        disable_chips(controller)
-        print('  created controller')
     # Get chip under test
     chip = controller.chips[chip_idx]
     results = {}
-    global_threshold_orig = chip.config.global_threshold
-    channel_mask_orig = chip.config.channel_mask[:]
     print('testing chip',chip.chip_id)
     for channel in channel_list:
         print('testing channel',channel)
@@ -919,7 +860,7 @@ def scan_threshold(controller=None, board='pcb-5', chip_idx=0,
         chip.config.channel_mask[channel] = 0
         chip.config.reset_cycles = reset_cycles
         print('  writing config')
-        registers_to_write = range(32) + [52,53,54,55] + [60,61,62]
+        registers_to_write = list(range(32)) + [52,53,54,55] + [60,61,62]
         controller.write_configuration(chip,registers_to_write)
         print('  reading config')
         controller.read_configuration(chip)
@@ -929,7 +870,7 @@ def scan_threshold(controller=None, board='pcb-5', chip_idx=0,
                            threshold_max_coarse+1,
                            threshold_step_coarse)
         # Scan from high to low
-        thresholds.reverse()
+        thresholds = list(reversed(thresholds))
         # Prepare to scan
         n_packets = []
         adc_means = []
@@ -983,34 +924,18 @@ def scan_threshold(controller=None, board='pcb-5', chip_idx=0,
         print('%d %d %d %.2f %.2f' % (channel, results[channel][0][-1],
                                       results[channel][1][-1], results[channel][2][-1],
                                       results[channel][3][-1]))
-    # Restore original global threshold and channel mask
-    chip.config.global_threshold = global_threshold_orig
-    chip.config.pixel_trim_thresholds = [16]*32
-    controller.write_configuration(chip,32)
-    controller.write_configuration(chip,range(32))
-    chip.config.channel_mask = channel_mask_orig
-    controller.write_configuration(chip,[52,53,54,55])
-    if close_controller:
-        controller.serial_close()
     return results
 
-def scan_threshold_with_communication(controller=None, board='pcb-1', chip_idx=0,
+@use_quickcontroller
+@conserve_config
+def scan_threshold_with_communication(controller=None, board=None, chip_idx=0,
                                       channel_list=range(32), threshold_min_coarse=26,
                                       threshold_max_coarse=37, threshold_step_coarse=1,
                                       saturation_level=1000, run_time=0.1):
     '''Scan the signal rate versus channel threshold while writing to chip registers'''
-    # Create controller and initialize chips to appropriate state
-    close_controller = False
-    if controller is None:
-        close_controller = True
-        controller = quickcontroller(board)
-        disable_chips(controller)
-        print('  created controller')
     # Get chip under test
     chip = controller.chips[chip_idx]
     results = {}
-    global_threshold_orig = chip.config.global_threshold
-    channel_mask_orig = chip.config.channel_mask[:]
     print('testing chip',chip.chip_id)
     for channel in channel_list:
         print('testing channel',channel)
@@ -1027,7 +952,7 @@ def scan_threshold_with_communication(controller=None, board='pcb-1', chip_idx=0
                            threshold_max_coarse+1,
                            threshold_step_coarse)
         # Scan from high to low
-        thresholds.reverse()
+        thresholds = list(reversed(thresholds))
         # Prepare to scan
         n_packets = []
         adc_means = []
@@ -1080,31 +1005,18 @@ def scan_threshold_with_communication(controller=None, board='pcb-1', chip_idx=0
         print('%d %d %d %.2f %.2f' % (channel, results[channel][0][-1],
                                       results[channel][1][-1], results[channel][2][-1],
                                       results[channel][3][-1]))
-    # Restore original global threshold and channel mask
-    chip.config.global_threshold = global_threshold_orig
-    controller.write_configuration(chip,32)
-    chip.config.channel_mask = channel_mask_orig
-    controller.write_configuration(chip,[52,53,54,55])
-    if close_controller:
-        controller.serial_close()
     return results
 
-def test_csa_gain(controller=None, chip_idx=0, board='pcb-5', reset_cycles=4096,
+@use_quickcontroller
+@conserve_config
+def test_csa_gain(controller=None, chip_idx=0, board=None, reset_cycles=4096,
                   global_threshold=40, pixel_trim_thresholds=[16]*32, pulse_dac_start=1,
                   pulse_dac_end=60, pulse_dac_step=5, n_pulses=10, adc_burst_length=0,
                   channel_list=range(32), dac_max=255, dac_min=0, csa_recovery_time=0.1,
                   sample_cycles=255):
     '''Pulse channels with increasing pulse sizes'''
-    close_controller = False
-    if controller is None:
-        close_controller = True
-        controller = quickcontroller(board)
-        controller.disable()
     chip = controller.chips[chip_idx]
     print('initial config for chip %d' % chip.chip_id)
-    # Save current configuration
-    temp_filename = 'tmp_config.json'
-    chip.config.write(temp_filename,force=True)
     # Set up chip for testing
     controller.disable(chip_id=chip.chip_id)
     chip.config.global_threshold = global_threshold
@@ -1113,7 +1025,7 @@ def test_csa_gain(controller=None, chip_idx=0, board='pcb-5', reset_cycles=4096,
     chip.config.reset_cycles = reset_cycles
     chip.config.adc_burst_length = adc_burst_length
     chip.config.sample_cycles = sample_cycles
-    controller.write_configuration(chip, range(33) + [48] + range(60,63))
+    controller.write_configuration(chip, list(range(33)) + [48] + list(range(60,63)))
     larpix_scripting.clear_buffer(controller)
     if not controller.verify_configuration(chip_id=chip.chip_id)[0]:
         print('Warning: chip config does not match readback')
@@ -1157,32 +1069,17 @@ def test_csa_gain(controller=None, chip_idx=0, board='pcb-5', reset_cycles=4096,
         if reset_attempts >= 2:
             print('testpulse reset failed - check pulse size and DAC min/max')
         print('%d sent / %d received' % (pulses_sent, packets_received))
-    # Restore previous state
-    controller.disable(chip_id=chip.chip_id)
-    chip.config.load(temp_filename)
-    controller.write_configuration(chip)
-    os.remove(temp_filename)
-    if not controller.verify_configuration(chip_id=chip.chip_id)[0]:
-        print('Warning: Could not restore chip state')
-    if close_controller:
-        controller.serial_close()
 
-def test_testpulse_linearity(controller=None, chip_idx=0, board='pcb-5', reset_cycles=4096,
+@use_quickcontroller
+@conserve_config
+def test_testpulse_linearity(controller=None, chip_idx=0, board=None, reset_cycles=4096,
                              global_threshold=40, pixel_trim_thresholds=[16]*32,
                              pulse_dac=50, dac_max=255, dac_min=0, dac_step=1,
                              n_pulses=1, adc_burst_length=0, channel_list=range(32),
                              csa_recovery_time=0.1, sample_cycles=255):
     '''Pulse channels with same pulse size changing the DAC step values'''
-    close_controller = False
-    if controller is None:
-        close_controller = True
-        controller = quickcontroller(board)
-        controller.disable()
     chip = controller.chips[chip_idx]
     print('initial config for chip %d' % chip.chip_id)
-    # Save current configuration
-    temp_filename = 'tmp_config.json'
-    chip.config.write(temp_filename,force=True)
     # Set up chip for testing
     controller.disable(chip_id=chip.chip_id)
     chip.config.global_threshold = global_threshold
@@ -1191,7 +1088,7 @@ def test_testpulse_linearity(controller=None, chip_idx=0, board='pcb-5', reset_c
     chip.config.reset_cycles = reset_cycles
     chip.config.adc_burst_length = adc_burst_length
     chip.config.sample_cycles = sample_cycles
-    controller.write_configuration(chip, range(33) + [48] + range(60,63))
+    controller.write_configuration(chip, list(range(33)) + [48] + list(range(60,63)))
     larpix_scripting.clear_buffer(controller)
     if not controller.verify_configuration(chip_id=chip.chip_id)[0]:
         print('Warning: chip config does not match readback')
@@ -1235,28 +1132,14 @@ def test_testpulse_linearity(controller=None, chip_idx=0, board='pcb-5', reset_c
         if reset_attempts >= 2:
             print('testpulse reset failed - check pulse size and DAC min/max')
         print('%d sent / %d received' % (pulses_sent, packets_received))
-    # Restore previous state
-    controller.disable(chip_id=chip.chip_id)
-    chip.config.load(temp_filename)
-    controller.write_configuration(chip)
-    os.remove(temp_filename)
-    if not controller.verify_configuration(chip_id=chip.chip_id)[0]:
-        print('Warning: Could not restore chip state')
-    if close_controller:
-        controller.serial_close()
 
-def test_leakage_current(controller=None, chip_idx=0, board='pcb-5', reset_cycles=None,
+@use_quickcontroller
+@conserve_config
+def test_leakage_current(controller=None, chip_idx=0, board=None, reset_cycles=None,
                          global_threshold=125, trim=16, run_time=1, channel_list=range(32)):
     '''Sets chips to high threshold and counts number of triggers'''
-    close_controller = False
-    if controller is None:
-        close_controller = True
-        controller = quickcontroller(board)
-
     chip = controller.chips[chip_idx]
     print('initial configuration for chip %d' % chip.chip_id)
-    temp_filename = 'tmp_config.json'
-    chip.config.write(temp_filename,force=True)
     chip.config.global_threshold = global_threshold
     chip.config.pixel_trim_thresholds = [trim] * 32
     if reset_cycles is None:
@@ -1297,12 +1180,6 @@ def test_leakage_current(controller=None, chip_idx=0, board='pcb-5', reset_cycle
     rms_rate = sum(abs(rate - mean_rate)
                    for rate in return_data['rate'])/len(return_data['rate'])
     print('chip mean: %.3f, rms: %.3f' % (mean_rate, rms_rate))
-    controller.disable(chip_id=chip.chip_id)
-    chip.config.load(temp_filename)
-    controller.write_configuration(chip)
-    os.remove(temp_filename)
-    if close_controller:
-        controller.serial_close()
     return return_data
 
 def pulse_chip(controller, chip, dac_level):
@@ -1311,17 +1188,12 @@ def pulse_chip(controller, chip, dac_level):
     controller.write_configuration(chip,46,write_read=0.1)
     return controller.reads[-1]
 
+@use_quickcontroller
 def noise_test_all_chips(n_pulses=1000, pulse_channel=0, pulse_dac=6, threshold=40,
                          controller=None, testpulse_dac_max=235, testpulse_dac_min=40,
-                         trim=0, board='pcb-5', reset_cycles=4096, csa_recovery_time=0.1,
+                         trim=0, board=None, reset_cycles=4096, csa_recovery_time=0.1,
                          reset_dac_time=1):
     '''Run noise_test_internal_pulser on all available chips'''
-    # Create controller and initialize chip,s to appropriate state
-    close_controller = False
-    if controller is None:
-        close_controller = True
-        controller = quickcontroller(board)
-
     for chip_idx in range(len(controller.chips)):
         chip_threshold = threshold
         chip_pulse_dac = pulse_dac
@@ -1337,19 +1209,14 @@ def noise_test_all_chips(n_pulses=1000, pulse_channel=0, pulse_dac=6, threshold=
                                    reset_dac_time=reset_dac_time,
                                    testpulse_dac_min=testpulse_dac_min, trim=trim)
     result = controller.reads
-    if close_controller:
-        controller.serial_close()
     return result
 
-def noise_test_external_pulser(board='pcb-5', chip_idx=0, run_time=10,
+@use_quickcontroller
+@conserve_config
+def noise_test_external_pulser(board=None, chip_idx=0, run_time=10,
                                channel_list=range(32), global_threshold=200,
                                controller=None, reset_cycles=4096):
     '''Scan through channels with external trigger enabled - report adc width'''
-    close_controller = False
-    if controller is None:
-        close_controller = True
-        controller = quickcontroller(board)
-    disable_chips(controller)
     # Get chip under test
     chip = controller.chips[chip_idx]
     print('initial configuration for chip %d' % chip.chip_id)
@@ -1390,19 +1257,14 @@ def noise_test_external_pulser(board='pcb-5', chip_idx=0, run_time=10,
             print('%d  %f  %f' % (channel, mean[channel], std_dev[channel]))
 
     flush_logger()
-    if close_controller:
-        controller.serial_close()
     return (adc_values, mean, std_dev)
 
-def noise_test_low_threshold(board='pcb-5', chip_idx=0, run_time=1,
+@use_quickcontroller
+@conserve_config
+def noise_test_low_threshold(board=None, chip_idx=0, run_time=1,
                              channel_list=range(32), global_threshold=0,
                              controller=None):
     '''Scan through channels at low threshold - report adc width'''
-    close_controller = False
-    if controller is None:
-        close_controller = True
-        controller = quickcontroller(board)
-    controller.disable()
     # Get chip under test
     chip = controller.chips[chip_idx]
     print('initial configuration for chip %d' % chip.chip_id)
@@ -1433,29 +1295,19 @@ def noise_test_low_threshold(board='pcb-5', chip_idx=0, run_time=1,
             print('%d  %f  %f' % (channel, mean[channel], std_dev[channel]))
 
     flush_logger()
-    if close_controller:
-        controller.serial_close()
     return (adc_values, mean, std_dev)
 
-def noise_test_internal_pulser(board='pcb-5', chip_idx=0, n_pulses=1000,
+@use_quickcontroller
+@conserve_config
+def noise_test_internal_pulser(board=None, chip_idx=0, n_pulses=1000,
                                pulse_channel=0, pulse_dac=6, threshold=40,
                                controller=None, testpulse_dac_max=235,
                                testpulse_dac_min=40, trim=0, reset_cycles=4096,
                                csa_recovery_time=0.1, reset_dac_time=1):
     '''Use cross-trigger from one channel to evaluate noise on other channels'''
-    # Create controller and initialize chips to appropriate state
-    close_controller = False
-    if controller is None:
-        close_controller = True
-        controller = quickcontroller(board)
-        #disable_chips(controller)
     # Get chip under test
     chip = controller.chips[chip_idx]
     print('initial configuration for chip %d' % chip.chip_id)
-    # Save current configuration in a temporary file
-    temp_filename = '.config_%s.json' % time.strftime('%Y_%m_%d_%H_%M_%S',time.localtime())
-    print('temporarily storing previous configuration: %s' % temp_filename)
-    chip.config.write(temp_filename,force=True)
     # Configure chip for pulsing one channel
     controller.enable_testpulse(chip_id=chip.chip_id, channel_list=[pulse_channel],
                                  start_dac = testpulse_dac_max)
@@ -1504,33 +1356,20 @@ def noise_test_internal_pulser(board='pcb-5', chip_idx=0, n_pulses=1000,
         print('pulse: %4d, received: %4d, DAC: %4d' % (pulse_idx, len(result[-1]), dac_level))
         print(result[-1])
 
-    # Reset DAC level, and disconnect channel
-    controller.disable_testpulse()
-    chip.config.load(temp_filename)
-    controller.write_configuration(chip)
-    os.remove(temp_filename)
-    if not controller.verify_configuration(chip_id=chip.chip_id)[0]:
-        print('  warning: could not verify original chip state')
     # Keep a handle to chip data, and return
     flush_logger()
-    if close_controller:
-        controller.serial_close()
     print('Pulses with # trigs > 1: %4d, Missed trigs: %4d' % (extra, lost))
     return result
 
-def scan_threshold_with_pulse(controller=None, board='pcb-1', chip_idx=0,
+@use_quickcontroller
+@conserve_config
+def scan_threshold_with_pulse(controller=None, board=None, chip_idx=0,
                               channel_list=range(32), max_acceptable_efficiency=1.5,
                               min_acceptable_efficiency=0.5, n_pulses=100, dac_pulse=6,
                               testpulse_dac_max=235, testpulse_dac_min=229, reset_cycles=4096,
                               threshold_max=40, threshold_min=20, threshold_step=1):
     ''' Pulse channels with test pulse to determine the minimum threshold for
     triggering at least a specified efficiency '''
-    close_controller = False
-    if not controller:
-        # Create controller and initialize chips to appropriate state
-        close_controller = True
-        controller = quickcontroller(board)
-        disable_chips(controller)
     chip = controller.chips[chip_idx]
     larpix_scripting.clear_buffer(controller)
     results = {}
@@ -1599,23 +1438,17 @@ def scan_threshold_with_pulse(controller=None, board='pcb-1', chip_idx=0,
             print('%d %d %.2f'% (key,results[key]['thresholds'][-1],
                                  results[key]['efficiencies'][-1]))
 
-    if close_controller:
-        controller.serial_close()
     return results
 
-def scan_trim_with_pulse(controller=None, board='pcb-1', chip_idx=0,
+@use_quickcontroller
+@conserve_config
+def scan_trim_with_pulse(controller=None, board=None, chip_idx=0,
                          channel_list=range(32), max_acceptable_efficiency=1.5,
                          min_acceptable_efficiency=0.5, n_pulses=100, dac_pulse=6,
                          testpulse_dac_max=235, testpulse_dac_min=229, reset_cycles=4096,
                          trim_max=31, trim_min=0, trim_step=1, threshold=40):
     ''' Pulse channels with test pulse to determine the minimum trim for
     triggering at least a specified efficiency '''
-    close_controller = False
-    if not controller:
-        # Create controller and initialize chips to appropriate state
-        close_controller = True
-        controller = quickcontroller(board)
-        disable_chips(controller)
     chip = controller.chips[chip_idx]
     larpix_scripting.clear_buffer(controller)
     results = {}
@@ -1688,23 +1521,17 @@ def scan_trim_with_pulse(controller=None, board='pcb-1', chip_idx=0,
             print('  %d %d %.2f' % (key, results[key]['trims'][-1],
                                     results[key]['efficiencies'][-1]))
 
-    if close_controller:
-        controller.serial_close()
     return results
 
-def test_min_signal_amplitude(controller=None, board='pcb-1', chip_idx=0,
+@use_quickcontroller
+@conserve_config
+def test_min_signal_amplitude(controller=None, board=None, chip_idx=0,
                               channel_list=range(32), threshold=40, trim=[16]*32,
                               threshold_trigger_rate=1.0, n_pulses=10, min_dac_amp=0,
                               max_dac_amp=10, dac_step=1, testpulse_dac_max=255,
                               testpulse_dac_min=128, reset_cycles=4096):
     ''' Pulse channel with increasing pulse sizes to determine the minimum pulse size for
     triggering at >90% '''
-    close_controller = False
-    if not controller:
-        # Create controller and initialize chips to appropriate state
-        close_controller = True
-        controller = quickcontroller(board)
-        disable_chips(controller)
     chip = controller.chips[chip_idx]
     results = {}
     for channel_idx, channel in enumerate(channel_list):
@@ -1754,8 +1581,6 @@ def test_min_signal_amplitude(controller=None, board='pcb-1', chip_idx=0,
                 results[channel]['min_pulse_dac'] = dac_amp
                 results[channel]['eff'] = triggers_received / pulses_issued
                 break
-    if close_controller:
-        controller.serial_close()
     print('summary (channel, trim, min_pulse_dac, eff):')
     for idx,channel in enumerate(results.keys()):
         try:
@@ -1765,13 +1590,9 @@ def test_min_signal_amplitude(controller=None, board='pcb-1', chip_idx=0,
             pass
     return results
 
-def analog_monitor(controller=None, board='pcb-5', chip_idx=0, channel=0):
+@use_quickcontroller
+def analog_monitor(controller=None, board=None, chip_idx=0, channel=0):
     '''Connect analog monitor for this channel'''
-    close_controller = False
-    if not controller:
-        # Create controller and initialize chips to appropriate state
-        close_controller = True
-        controller = quickcontroller(board)
     # Get chip under test
     chip = controller.chips[chip_idx]
     # Configure chip for analog monitoring
@@ -1779,8 +1600,6 @@ def analog_monitor(controller=None, board='pcb-5', chip_idx=0, channel=0):
     chip.config.csa_monitor_select[channel] = 1
     controller.write_configuration(chip, [38,39,40,41])
     # return controller, for optional reuse
-    if close_controller:
-        controller.serial_close()
     return controller
 
 def examine_global_scan(coarse_data, saturation_level=1000):

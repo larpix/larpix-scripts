@@ -1,5 +1,6 @@
 import os
 import json
+import time
 import larpix.larpix as larpix
 from helpers.script_logging import ScriptLogger
 log = ScriptLogger.get_script_log()
