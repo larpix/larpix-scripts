@@ -1,4 +1,4 @@
-'''
+''''
 A script to convert a .dat data file into the specified format with the
 following data:
 
@@ -18,7 +18,7 @@ import numpy as np
 from os.path import splitext
 import json
 from larpix.dataloader import DataLoader
-from larpix.larpix import Controller
+from larpix.larpix import (Controller, Configuration)
 from larpix.Timestamp import Timestamp
 from larpixgeometry.pixelplane import PixelPlane
 import larpixgeometry.layouts as layouts
@@ -76,6 +76,8 @@ elif args.format.lower() == 'root':
     root_serialblock = np.array([-1], dtype=int)
     root_v = np.array([-1], dtype=float)
     root_pdst_v = np.array([-1], dtype=float)
+    root_pixel_trim = np.array([-1], dtype=int)
+    root_global_threshold = np.array([-1], dtype=int)
     fout = ROOT.TFile(outfile, 'recreate')
     ttree = ROOT.TTree('larpixdata', 'LArPixData')
     ttree.Branch('channelid', root_channelid, 'channelid/I')
@@ -90,6 +92,8 @@ elif args.format.lower() == 'root':
     ttree.Branch('serialblock', root_serialblock, 'serialblock/I')
     ttree.Branch('v', root_v, 'v/D')
     ttree.Branch('pdst_v', root_pdst_v, 'pdst_v/D')
+    ttree.Branch('pixel_trim', root_pixel_trim, 'pixel_trim/I')
+    ttree.Branch('global_threshold', root_global_threshold, 'global_threshold/I')
 
 #geometry = PixelPlane.fromDict(layouts.load('sensor_plane_28_simple.yaml'))
 geometry = PixelPlane.fromDict(layouts.load(geom_choices[args.geometry]))
@@ -97,15 +101,33 @@ geometry = PixelPlane.fromDict(layouts.load(geom_choices[args.geometry]))
 numpy_arrays = []
 index_limit = 10000
 serialblock = -1 # serial read index
-numpy_arrays.append(np.empty((index_limit, 12), dtype=np.int64))
+numpy_arrays.append(np.empty((index_limit, 14), dtype=np.int64))
 current_array = numpy_arrays[-1]
 current_index = 0
 last_timestamp = {}
+chip_threshold = {}
 while True:
     block = loader.next_block()
     serialblock += 1
     if block is None: break
-    if block['block_type'] == 'data' and block['data_type'] == 'read':
+    elif block['block_type'] == 'data' and block['data_type'] == 'write':
+        # if write to pixel threshold -> store configuration value
+        packets = parse(bytes(block['data']))
+        for packet in packets:
+            if packet.packet_type == packet.CONFIG_WRITE_PACKET:
+                chipid = packet.chipid
+                if packet.register_address in Configuration.pixel_trim_threshold_addresses:
+                    channel = packet.register_address # channel id is equivalent to register address
+                    try:
+                        chip_threshold[chipid][channel] = packet.register_data
+                    except KeyError:
+                        chip_threshold[chipid] = { channel : packet.register_data }
+                elif packet.register_address == Configuration.global_threshold_address:
+                    try:
+                        chip_threshold[chipid]['global_threshold'] = packet.register_data
+                    except KeyError:
+                        chip_threshold[chipid] = { 'global_threshold' : packet.register_data }
+    elif block['block_type'] == 'data' and block['data_type'] == 'read':
         packets = parse(bytes(block['data']))
         for packet in packets:
             if packet.packet_type == packet.DATA_PACKET:
@@ -118,6 +140,12 @@ while True:
 
                 chipid = packet.chipid
                 channel = packet.channel_id
+                try:
+                    current_array[current_index][12] = chip_threshold[chipid][channel]
+                    current_array[current_index][13] = chip_threshold[chipid]['global_threshold']
+                except KeyError:
+                    current_array[current_index][12] = -1
+                    current_array[current_index][13] = -1
                 try:
                     pixel = geometry.chips[chipid].channel_connections[channel]
                 except KeyError:
@@ -164,14 +192,15 @@ while True:
                             root_rawADC[0], root_rawTimestamp[0],
                             root_ADC[0], root_timestamp[0],
                             root_serialblock[0], root_v[0],
-                            root_pdst_v[0]
+                            root_pdst_v[0], root_pixel_trim[0],
+                            root_global_threshold[0]
                         ) = current_array[current_index]
                     ttree.Fill()
                 else:
                     current_index += 1
                     if current_index == index_limit:
                         current_index = 0
-                        numpy_arrays.append(np.empty((index_limit, 12),
+                        numpy_arrays.append(np.empty((index_limit, 14),
                             dtype=np.int64))
                         current_array = numpy_arrays[-1]
 
@@ -188,5 +217,5 @@ else:
         dset.attrs['descripiton'] = '''
     channel id | chip id | pixel id | int(10*pixel x) | int(10*pixel y) | raw ADC | raw
     timestamp | 6-bit ADC | full timestamp | serial index | converted voltage (mV) | calib
-    pedestal voltage (mV)'''
+    pedestal voltage (mV) | chip global threshold | channel trim threshold'''
 
