@@ -5,7 +5,8 @@ Run basic noise tests for chips
 from __future__ import absolute_import
 from larpix.quickstart import quickcontroller
 from larpix.quickstart import disable_chips
-from larpix.larpix import (flush_logger, PacketCollection, Configuration)
+from larpix.larpix import (PacketCollection, Configuration)
+from larpix.serialport import SerialPort, flush_logger
 from helpers.script_logging import ScriptLogger
 import helpers.larpix_scripting as larpix_scripting
 import math
@@ -22,14 +23,15 @@ def use_quickcontroller(func):
         Frees up serial port after function runs
         '''
         return_value = None
+        io = SerialPort()
         if not 'controller' in kwargs:
             log.info('helpers.noise_tests.use_quickcontroller START')
             controller = None
             if not 'board' in kwargs:
-                controller = quickcontroller()
+                controller = quickcontroller(io=io)
             else:
                 board = kwargs['board']
-                controller = quickcontroller(board)
+                controller = quickcontroller(board, io=io)
             try:
                 controller.disable()
                 larpix_scripting.clear_buffer(controller)
@@ -37,7 +39,7 @@ def use_quickcontroller(func):
 
                 return_value = func(controller=controller, *args, **kwargs)
             finally:
-                controller.serial_close()
+                #controller.stop_listening()
                 log.info('helpers.noise_tests.use_quickcontroller END')
         else:
             return_value = func(*args, **kwargs)
@@ -1813,9 +1815,10 @@ def examine_fine_scan(fine_data, saturation_level=1000):
     result['chan_level_too_low'] = chan_level_too_low
     return result
 
-def run_threshold_test():
+@use_quickcontroller
+def run_threshold_test(controller=None):
     # Run test
-    cont = quickcontroller()
+    cont = controller
     disable_chips(cont)
     chip_results = []
     for chipidx in range(len(cont.chips)):
@@ -1837,7 +1840,6 @@ def run_threshold_test():
             chipidx,
             ch_result['chan_level_too_high'],
             ch_result['chan_level_too_low']))
-    cont.serial_close()
     return (thresh_descs, chip_results)
 
 def load_standard_test_configuration(path=None):

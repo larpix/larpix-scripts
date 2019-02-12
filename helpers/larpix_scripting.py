@@ -14,16 +14,28 @@ def clear_buffer_quick(controller, run_time=0.05):
     '''Open serial comms for run_time seconds'''
     controller.run(run_time,'clear buffer (quick)')
 
-def clear_buffer(controller, run_time=0.05, attempts=40):
+# def clear_buffer(controller, run_time=0.05, attempts=40):
+    # '''
+    # Ping serial comms until buffer is empty or until a number of attempts is reached,
+    # whichever is sooner.
+    # '''
+    # clear_buffer_attempts = attempts
+    # clear_buffer_quick(controller, run_time)
+    # while len(controller.reads[-1]) > 0 and clear_buffer_attempts > 0:
+        # clear_buffer_quick(controller, run_time)
+        # clear_buffer_attempts -= 1
+
+def clear_buffer(controller, delay=0.05):
     '''
-    Ping serial comms until buffer is empty or until a number of attempts is reached,
-    whichever is sooner.
+    Empty the queue after a given delay.
+
     '''
-    clear_buffer_attempts = attempts
-    clear_buffer_quick(controller, run_time)
-    while len(controller.reads[-1]) > 0 and clear_buffer_attempts > 0:
-        clear_buffer_quick(controller, run_time)
-        clear_buffer_attempts -= 1
+    controller.start_listening()
+    controller.read()
+    time.sleep(delay)
+    controller.read()
+    controller.stop_listening()
+
 
 def temp_store_config(chip):
     ''' Save chip configuration to a hidden configuration file '''
