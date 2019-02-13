@@ -18,6 +18,8 @@ import helpers.pathnames as pathnames
 import helpers.larpix_scripting as larpix_scripting
 import time
 import larpix.larpix as larpix
+import larpix.serialport as serialport
+from larpix.zmq_io import ZMQ_IO
 from sys import (exit, stdout)
 import json
 import os
@@ -109,7 +111,9 @@ log = sl.script_log
 log.info('arguments: %s' % str(args))
 
 try:
-    controller = larpix.Controller(timeout=0.01)
+    controller = larpix.Controller()
+    io = ZMQ_IO('tcp://10.0.1.6')#serialport.SerialPort()
+    controller.io = io
     chip0 = controller.all_chips[0]
     # Initial configuration of chips
     board_info = larpix_scripting.load_board(controller, infile)

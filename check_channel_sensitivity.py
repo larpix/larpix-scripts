@@ -20,6 +20,7 @@ import helpers.larpix_scripting as larpix_scripting
 import time
 import larpix.larpix as larpix
 from larpix.serialport import SerialPort
+from larpix.zmq_io import ZMQ_IO
 import helpers.noise_tests as noise_tests
 from sys import (exit, stdout)
 import json
@@ -88,7 +89,8 @@ log.info('arguments: %s' % str(args))
 
 try:
     controller = larpix.Controller()
-    controller.io = SerialPort()
+    #controller.io = SerialPort()
+    controller.io = ZMQ_IO('tcp://10.0.1.6')
     # Initial configuration of chips
     board_info = larpix_scripting.load_board(controller, infile)
     log.info('begin initial configuration of chips for board %s' % board_info)

@@ -7,6 +7,7 @@ from larpix.quickstart import quickcontroller
 from larpix.quickstart import disable_chips
 from larpix.larpix import (PacketCollection, Configuration)
 from larpix.serialport import SerialPort, flush_logger
+from larpix.zmq_io import ZMQ_IO
 from helpers.script_logging import ScriptLogger
 import helpers.larpix_scripting as larpix_scripting
 import math
@@ -23,7 +24,8 @@ def use_quickcontroller(func):
         Frees up serial port after function runs
         '''
         return_value = None
-        io = SerialPort()
+        #io = SerialPort(baudrate=1000000)
+        io = ZMQ_IO('tcp://10.0.1.6')
         if not 'controller' in kwargs:
             log.info('helpers.noise_tests.use_quickcontroller START')
             controller = None
@@ -1392,7 +1394,7 @@ def noise_test_low_threshold(board=None, chip_idx=0, run_time=1,
         larpix_scripting.clear_buffer(controller)
         controller.enable(chip_id=chip.chip_id, io_chain=chip.io_chain,
                           channel_list=[channel])
-        larpix_scripting.clear_buffer_quick(controller)
+        larpix_scripting.clear_buffer(controller)
         controller.run(run_time,'collect data')
         controller.disable(chip_id=chip.chip_id, io_chain=chip.io_chain)
         adc_values[channel] = [packet.dataword for packet in controller.reads[-1]

@@ -19,6 +19,7 @@ import time
 import sys
 import os
 import larpix.larpix as larpix
+import larpix.serialport as serialport
 import helpers.pathnames as pathnames
 
 class ScriptLogger(object):
@@ -94,10 +95,10 @@ class ScriptLogger(object):
         if not filename is None:
             self.data_logdir = os.path.split(filename)[0]
             self.data_logfile = filename
-        return larpix.enable_logger(self.data_logfile)
+        #return serialport.enable_logger(self.data_logfile)
 
     def flush_datalog(self):
-        return larpix.flush_logger()
+        return serialport.flush_logger()
 
     def disable_datalog(self):
-        return larpix.disable_logger()
+        return serialport.disable_logger()

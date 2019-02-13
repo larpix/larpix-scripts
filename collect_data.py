@@ -5,6 +5,8 @@ import larpix.larpix as larpix
 import helpers.pathnames as pathnames
 import helpers.larpix_scripting as larpix_scripting
 from larpix.quickstart import *
+from larpix.serialport import SerialPort
+from larpix.zmq_io import ZMQ_IO
 from helpers.script_logging import ScriptLogger
 from helpers.pixel_report import *
 from helpers.larpix_scripting import store_chip_configurations
@@ -48,7 +50,10 @@ last_read = []
 controller = None # keep handle to some variables in case you want to enter an interactive session
 board_info = None
 try:
-    controller = larpix.Controller(timeout=0.01)
+    controller = larpix.Controller()
+    # io = SerialPort()
+    io = ZMQ_IO('tcp://10.0.1.6')
+    controller.io = io
     board_info = larpix_scripting.load_board(controller, args.board)
     controller.disable()
     config_ok, different_registers = larpix_scripting.load_chip_configurations(
