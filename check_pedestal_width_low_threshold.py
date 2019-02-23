@@ -12,6 +12,7 @@ Requires a .json file containing chip-ids and daisy chain data formatted like
 '''
 
 from __future__ import print_function
+import numpy as np
 import argparse
 import logging
 from helpers.script_logging import ScriptLogger
@@ -128,9 +129,9 @@ try:
             continue
         chip_ped_mean = sum(board_results[chip_idx][0].values()) /\
             len(board_results[chip_idx][0].values())
-        chip_ped_rms = sum(abs(ped - chip_ped_mean)
+        chip_ped_rms = np.sqrt(sum((ped - chip_ped_mean)**2
                            for ped in board_results[chip_idx][0].values()) /\
-                           len(board_results[chip_idx][0])
+                           len(board_results[chip_idx][0]))
         log.info('%s-%d-c%d mean pedestal: %.2f adc, rms: %.2f adc' % \
                      (board_info, io_chain, chip_id, chip_ped_mean, chip_ped_rms))
 

@@ -12,6 +12,7 @@ Requires a .json file containing chip-ids and daisy chain data formatted like
 '''
 
 from __future__ import print_function
+import numpy as np
 import argparse
 import logging
 from helpers.script_logging import ScriptLogger
@@ -137,8 +138,8 @@ try:
             continue
         chip_mean = sum(board_results[chip_idx]['rate']) /\
             len(board_results[chip_idx]['rate'])
-        chip_rms = sum(abs(rate - chip_mean) for rate in board_results[chip_idx]['rate'])\
-            /len(board_results[chip_idx]['rate'])
+        chip_rms = np.sqrt(sum((rate - chip_mean)**2 for rate in board_results[chip_idx]['rate'])\
+                               /len(board_results[chip_idx]['rate']))
         log.info('%s-%d-c%d mean leakage rate: %.2f Hz, rms: %.2f Hz' % \
                      (board_info, io_chain, chip_id, chip_mean, chip_rms))
         for channel_idx,channel in enumerate(board_results[chip_idx]['channel']):
