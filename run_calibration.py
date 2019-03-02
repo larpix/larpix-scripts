@@ -30,13 +30,13 @@ Thus to extract a particular chip/channel's pedestal value use
 from __future__ import print_function
 import argparse
 from os.path import splitext
-from larpix.dataloader import DataLoader
+#from larpix.dataloader import DataLoader
 from larpix.larpix import Controller
 from sys import exit
 import os
 import json
 import helpers.calibration as calibration
-parse = Controller.parse_input
+#parse = Controller.parse_input
 
 def update_cal_data(cal_data, new_cal_data):
     if new_cal_data is None:
@@ -87,7 +87,7 @@ if not args.outfile is None and args.verbose:
     print(str(infiles) + ' -> ' + outfile)
 
 for infile in infiles:
-    loader = DataLoader(infile)
+    #loader = DataLoader(infile)
 
     cal_data = {}
     if not prev_calib is None:
