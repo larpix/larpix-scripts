@@ -1,67 +1,23 @@
-#from larpix.analyzers import LogAnalyzer
+from larpix.analyzers import LogAnalyzer
+from helpers.lpx_convert import LpxAnalyzer
 import larpix.larpix as larpix
 from larpix.timestamp import Timestamp
 import numpy as np
 import argparse
 import json
 import sys
+from os.path import splitext
 from bitarray import bitarray
 
-def extract_lpx_data(word):
+def get_analyzer(filename):
     '''
-    Parse the raw bytes from Igor's file .lpx file
-    returns timestamp, packet_bytes
+    Returns proper analyzer for file type
     '''
-    bits = bitarray(endian='little')
-    bits.frombytes(word)
-    timestamp_bits = bits[54:64]
-    packet_bits = bits[0:54]
-    timestamp_bits.reverse()
-    timestamp = int(timestamp_bits.to01(),2)
-    packet_bytes = bits[0:54].tobytes()
-    return timestamp, packet_bytes
-
-def fix_lpx_timestamp_rollover(time, ref, time_nbit=10, late_packet_window=10):
-    '''
-    resulting in an relative timestamp within run
-    Works as long as `ref` is known to be <2**`time_nbit`-`late_packet_window` seconds before time
-    If `ref` - `time` is < `late_packet_window` it is assumed that this packet is out of order and
-    returns -1
-    '''
-    rollover_dt = 2**time_nbit
-    n_rollovers = 0
-    if ref-time > 0:
-        # skip non-sequential packets
-        if ref-time < 10:
-            return -1
-        n_rollovers = np.ceil(float(ref - time) / rollover_dt)
-    fixed_time = n_rollovers * rollover_dt + time
-    return fixed_time
-
-class LogAnalyzer:
-    nbytes_word = 8
-    def __init__(self, filename, prev_timestamp=0):
-        self.file = open(filename,'rb')
-        self.prev_timestamp=prev_timestamp
-
-    def close(self):
-        self.file.close()
-        self.file = None
-
-    def next_transmission(self):
-        bytes = self.file.read(self.nbytes_word)
-        if bytes:
-            timestamp, packet_bytes = extract_lpx_data(bytes)
-            fixed_timestamp = fix_lpx_timestamp_rollover(timestamp, self.prev_timestamp)
-            if fixed_timestamp >= 0:
-                self.prev_timestamp = fixed_timestamp
-            faux_block = {'block_type':'data',
-                          'data_type':'read',
-                          'packets':[larpix.Packet(bytestream=packet_bytes)],
-                          'time':timestamp
-                          }
-            return faux_block
-        return None
+    ext = splitext(filename)[1]
+    if ext == '.lpx':
+        return LpxAnalyzer(filename)
+    else:
+        return LogAnalyzer(filename)
 
 def adc_to_v(adc, vref, vcm):
     '''
@@ -161,7 +117,7 @@ def get_peak_values(hist):
     return return_dict
 
 def extract_chip_channel_ids(filename, max_trans=None, verbose=False):
-    la = LogAnalyzer(filename)
+    la = get_analyzer(filename)
     chip_channel_ids = {}
     loop_data = {
         'n_trans': 0,
@@ -202,7 +158,7 @@ def extract_chip_channel_ids(filename, max_trans=None, verbose=False):
     return chip_channel_ids
 
 def extract_chip_rel_timing(filename, verbose=False, max_trans=None):
-    la = LogAnalyzer(filename)
+    la = get_analyzer(filename)
     last_timestamp = {}
     rel_offset = {}
     loop_data = {
@@ -275,7 +231,7 @@ def extract_pulsed_adc_dist(filename, adc_max=256, adc_min=0, adc_step=2, max_tr
     Extracts adc distributions for each chip and channel excluding hits from channels that
     were issued test pulses
     '''
-    la = LogAnalyzer(filename)
+    la = get_analyzer(filename)
     adc_dist = {}
     loop_data = {
         'n_trans': 0,

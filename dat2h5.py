@@ -25,6 +25,7 @@ from larpix.timestamp import Timestamp
 from larpixgeometry.pixelplane import PixelPlane
 import larpixgeometry.layouts as layouts
 from bitarray import bitarray
+from helpers.lpx_convert import LpxLoader
 parse = SerialPort._parse_input
 
 def fix_ADC(raw_adc):
@@ -34,79 +35,6 @@ def fix_ADC(raw_adc):
 
     '''
     return (raw_adc - 128)//2
-
-def extract_lpx_data(word):
-    '''
-    Parse the raw bytes from Igor's file .lpx file
-    returns timestamp, packet_bytes
-    '''
-    bits = bitarray(endian='little')
-    bits.frombytes(word)
-    timestamp_bits = bits[54:64]
-    packet_bits = bits[0:54]
-    timestamp_bits.reverse()
-    timestamp = int(timestamp_bits.to01(),2)
-    packet_bytes = bits[0:54].tobytes()
-    return timestamp, packet_bytes
-
-def fix_lpx_timestamp_rollover(time, ref, time_nbit=10, late_packet_window=10):
-    '''
-    Corrects for rollovers in the `time_nbit`-bit timestamp `time`
-    resulting in an relative timestamp within run
-    Works as long as `ref` is known to be <2**`time_nbit`-`late_packet_window` seconds before time
-    If `ref` - `time` is < `late_packet_window` it is assumed that this packet is out of order and
-    returns -1
-    '''
-    rollover_dt = 2**time_nbit
-    n_rollovers = 0
-    if ref-time > 0:
-        # skip non-sequential packets
-        if ref-time < 10:
-            return -1
-        n_rollovers = np.ceil(float(ref - time) / rollover_dt)
-    fixed_time = n_rollovers * rollover_dt + time
-    return fixed_time
-
-class lpx_loader:
-    '''
-    A dummy class to make DataLoader-like read blocks from .lpx data
-    '''
-    nbytes_word = 8
-
-    def __init__(self, filename, t0=0):
-        '''
-        Reads from `filename`
-        `t0` sets the t0 for the run (since .lpx data only has a 10b timestamp)
-        '''
-        self.file = open(filename,'rb')
-        self.prev_timestamp = t0
-
-    def close(self):
-        '''
-        Closes file nicely
-        '''
-        self.file.close()
-        self.file = None
-
-    def next_block(self):
-        '''
-        Reads next word from data file and formats as though it was from Dan's .dat file format
-        '''
-        bytes = self.file.read(self.nbytes_word)
-        if bytes:
-            timestamp, packet_bytes = extract_lpx_data(bytes)
-            fixed_timestamp = fix_lpx_timestamp_rollover(timestamp, self.prev_timestamp)
-            if fixed_timestamp >= 0:
-                self.prev_timestamp = fixed_timestamp
-            faux_block = {'block_type':'data',
-                          'data_type':'read',
-                          'data':(SerialPort.start_byte + packet_bytes + b'\x00' +
-                                  SerialPort.stop_byte),
-                          'time':timestamp
-                          }
-            return faux_block
-        return None
-
 
 parser = argparse.ArgumentParser()
 parser.add_argument('infile', help='Input file of either Dan\'s .dat format or Igor\'s .lpx '
@@ -138,7 +66,7 @@ loader = None
 if infile_fmt == '.dat':
     loader = DataLoader(infile)
 elif infile_fmt == '.lpx':
-    loader = lpx_loader(infile)
+    loader = LpxLoader(infile)
 else:
     raise RuntimeError('Unrecognizable file format {}'.format(infile_fmt))
 calib_data = {}
@@ -169,7 +97,7 @@ elif args.format.lower() == 'root':
     root_pdst_v = np.array([-1], dtype=float)
     root_pixel_trim = np.array([-1], dtype=int)
     root_global_threshold = np.array([-1], dtype=int)
-    root_cpu_timestamp = np.array([0], dtype=np.uint64)
+    root_cpu_timestamp = np.array([0], dtype=int)
     fout = ROOT.TFile(outfile, 'recreate')
     ttree = ROOT.TTree('larpixdata', 'LArPixData')
     ttree.Branch('channelid', root_channelid, 'channelid/I')
@@ -186,7 +114,7 @@ elif args.format.lower() == 'root':
     ttree.Branch('pdst_v', root_pdst_v, 'pdst_v/D')
     ttree.Branch('pixel_trim', root_pixel_trim, 'pixel_trim/I')
     ttree.Branch('global_threshold', root_global_threshold, 'global_threshold/I')
-    ttree.Branch('cpu_timestamp', root_cpu_timestamp, 'cpu_timestamp/l')
+    ttree.Branch('cpu_timestamp', root_cpu_timestamp, 'cpu_timestamp/I')
 
 #geometry = PixelPlane.fromDict(layouts.load('sensor_plane_28_simple.yaml'))
 geometry = PixelPlane.fromDict(layouts.load(geom_choices[args.geometry]))
@@ -197,21 +125,28 @@ serialblock = -1 # serial read index
 numpy_arrays.append(np.empty((index_limit, 15), dtype=np.int64))
 current_array = numpy_arrays[-1]
 current_index = 0
+fifo_full = 0
+fifo_half = 0
+stored_packets_len = 512
+repeated_packets = 0
+prev_packets = []
 last_timestamp = {}
 chip_threshold = {}
+print_each=False
 while True:
     block = loader.next_block()
     serialblock += 1
     if block is None:
         if verbose:
-            print('Packets processed: {}'.format(serialblock-1))
+            print('Packets processed: {}, FH: {}, FF: {}, repeat: {}'.format(serialblock,fifo_half,fifo_full, repeated_packets))
         break
     elif not n_trans is None and serialblock >= n_trans:
         if verbose:
-            print('Packets processed: {}'.format(serialblock-1))
+            print('Packets processed: {}, FH: {}, FF: {}, repeat: {}'.format(serialblock,fifo_half,fifo_full, repeated_packets))
         break
     elif verbose and serialblock % 1000 == 0:
-        print('Packets processed: {}'.format(serialblock),end='\r')
+        print('Packets processed: {}, FH: {}, FF: {}, repeat: {}'.format(serialblock,fifo_half,fifo_full, repeated_packets), end='\r')
+
     if serialblock < n_skip:
         continue
     if block['block_type'] == 'data' and block['data_type'] == 'write':
@@ -234,7 +169,16 @@ while True:
     elif block['block_type'] == 'data' and block['data_type'] == 'read':
         packets = parse(bytes(block['data']))
         for packet in packets:
+            if packet in prev_packets:
+                prev_packets += [packet]
+                repeated_packets += 1
+                while len(prev_packets) > stored_packets_len:
+                    del prev_packets[0]
+                continue
             if packet.packet_type == packet.DATA_PACKET:
+                fifo_half += packet.fifo_half_flag
+                fifo_full += packet.fifo_full_flag
+
                 current_array[current_index][0] = packet.channel_id
                 current_array[current_index][1] = packet.chipid
                 current_array[current_index][5] = packet.dataword
@@ -282,15 +226,17 @@ while True:
                 ref_time = None
                 if packet.chipid in last_timestamp.keys():
                     ref_time = last_timestamp[packet.chipid]
-                current_timestamp = -1
+                current_timestamp = None
                 if not cpu_time < 0:
                     current_timestamp = Timestamp.from_packet(packet, cpu_time,
                                                               ref_time)
                     current_array[current_index][8] = current_timestamp.ns
-                if len(last_timestamp.keys())==0 and not cpu_time < 0:
+                else:
+                    current_array[current_index][8] = -1
+                if len(last_timestamp.keys())==0 and not current_timestamp is None:
                     for chip in range(255):
                         last_timestamp[chip] = current_timestamp
-                elif not cpu_time < 0:
+                elif not cpu_time < 0 and not current_timestamp is None:
                     last_timestamp[chipid] = current_timestamp
 
                 if use_root:
@@ -311,6 +257,10 @@ while True:
                         numpy_arrays.append(np.empty((index_limit, 15),
                             dtype=np.int64))
                         current_array = numpy_arrays[-1]
+
+                prev_packets += [packet]
+                while len(prev_packets) > stored_packets_len:
+                    del prev_packets[0]
 loader.close()
 
 if use_root:
