@@ -29,7 +29,7 @@ def fix_lpx_timestamp_rollover(time, ref, time_nbit=10, late_packet_window=10):
     n_rollovers = 0
     if ref-time > 0:
         # skip non-sequential packets
-        if (ref-time)%rollover_dt < late_packet_window and (ref-time)%rollover_dt > 0:
+        if (ref - time)%rollover_dt < late_packet_window and abs((ref-time)%rollover_dt) > 0:
             return -1
         n_rollovers = np.ceil(max(float(ref - time) / (rollover_dt),0))
     fixed_time = n_rollovers * rollover_dt + time
@@ -66,13 +66,13 @@ class LpxLoader:
             fixed_timestamp = fix_lpx_timestamp_rollover(time=timestamp, ref=self.prev_timestamp)
             #if fixed_timestamp == -1:
             #    print(timestamp, self.prev_timestamp, fixed_timestamp)
-            #    print(packet_bytes)
             if fixed_timestamp >= 0:
                 self.prev_timestamp = fixed_timestamp
             faux_block = {'block_type':'data',
                           'data_type':'read',
                           'data':(SerialPort.start_byte + packet_bytes + b'\x00' +
                                   SerialPort.stop_byte),
+                          'lpx_packet_bytes': packet_bytes,
                           'time':fixed_timestamp
                           }
             return faux_block
@@ -98,5 +98,5 @@ class LpxAnalyzer:
     def next_transmission(self):
         faux_block = self.loader.next_block()
         if not faux_block is None:
-            faux_block['packets'] = [larpix.Packet(bytestream=packet_bytes)]
+            faux_block['packets'] = [larpix.Packet(bytestream=faux_block['lpx_packet_bytes'])]
         return faux_block

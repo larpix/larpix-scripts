@@ -127,7 +127,7 @@ current_array = numpy_arrays[-1]
 current_index = 0
 fifo_full = 0
 fifo_half = 0
-stored_packets_len = 512
+stored_packets_len = 256
 repeated_packets = 0
 prev_packets = []
 last_timestamp = {}
@@ -233,6 +233,7 @@ while True:
                     current_array[current_index][8] = current_timestamp.ns
                 else:
                     current_array[current_index][8] = -1
+
                 if len(last_timestamp.keys())==0 and not current_timestamp is None:
                     for chip in range(255):
                         last_timestamp[chip] = current_timestamp

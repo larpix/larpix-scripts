@@ -1,4 +1,4 @@
-from larpix.analyzers import LogAnalyzer
+from larpix.serial_helpers.analyzers import LogAnalyzer
 from helpers.lpx_convert import LpxAnalyzer
 import larpix.larpix as larpix
 from larpix.timestamp import Timestamp
