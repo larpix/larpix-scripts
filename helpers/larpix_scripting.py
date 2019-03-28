@@ -70,8 +70,11 @@ def npackets_by_chip_channel(packets):
         try:
             npackets[packet.chipid][packet.channel_id] += 1
         except KeyError:
-            npackets[packet.chipid] = [0]*32
-            npackets[packet.chipid][packet.channel_id] += 1
+            try:
+                npackets[packet.chipid] = [0]*32
+                npackets[packet.chipid][packet.channel_id] += 1
+            except IndexError:
+                log.warn('Bad packet - {}'.format(str(packet)))
     return npackets
 
 def npackets_by_channel(packets, chip_id):
@@ -94,6 +97,8 @@ def verify_chip_configuration(controller, chip_id=None):
         if not config_ok:
             log.warn('chip configurations could not be verified')
             log.warn('different registers: %s' % str(different_registers))
+    else:
+        log.info('chip configurations verified')
     return config_ok, different_registers
 
 def enforce_chip_configuration(controller):
@@ -150,7 +155,7 @@ def store_chip_configurations(controller, board_info, outdir, force=False):
 
 def load_chip_configurations(controller, board, config_path, silence=False,
                              default_config=None, threshold_correction=0,
-                             trim_correction=0):
+                             trim_correction=0, chips=None):
     '''
     Disables chips, then loads specified configurations onto chips in reverse
     daisy chain order.
@@ -158,10 +163,14 @@ def load_chip_configurations(controller, board, config_path, silence=False,
     `default_config` is the configuration to load if a chip specific file is not found
     and `config_path` is a directory.
     '''
+    chips_to_load = chips
+    if chips_to_load is None:
+        chips_to_load = reversed(controller.chips)
+
     if os.path.isfile(config_path) and \
             os.path.splitext(config_path)[1] == '.json':
         controller.disable()
-        for chip in reversed(controller.chips):
+        for chip in chips_to_load:
             chip_identifier = (board, chip.io_chain, chip.chip_id)
             chip.config.load(config_path)
             chip.config.global_threshold += threshold_correction
@@ -176,7 +185,7 @@ def load_chip_configurations(controller, board, config_path, silence=False,
                 controller.disable(chip_id=chip.chip_id, io_chain=chip.io_chain)
     elif os.path.isdir(config_path):
         controller.disable()
-        for chip in reversed(controller.chips):
+        for chip in chips_to_load:
             chip_identifier = (board, chip.io_chain, chip.chip_id)
             try:
                 chip.config.load(config_path + '/%s-%d-c%d_config.json' % \
@@ -208,5 +217,5 @@ def load_chip_configurations(controller, board, config_path, silence=False,
             if silence:
                 controller.disable(chip_id=chip.chip_id, io_chain=chip.io_chain)
     else: raise IOError('specified configuration not found')
-    return verify_chip_configuration(controller)
-    #return enforce_chip_configuration(controller)
+    #return verify_chip_configuration(controller)
+    return enforce_chip_configuration(controller)

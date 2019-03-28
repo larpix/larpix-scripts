@@ -137,6 +137,10 @@ try:
                     log.info('skipping %d-c%d' % chip_info)
                     continue
 
+            config_ok, different_registers = larpix_scripting.load_chip_configurations(controller, board_info, config_file, silence=False, default_config=default_config, chips=[chip])
+            channel_mask_orig = chip.config.channel_mask
+            enabled_channels = [channel for channel in range(32)
+                if channel_mask_orig[channel] == 0]
             global_threshold = global_threshold_max
             chip.config.global_threshold = global_threshold
             pixel_trims = [pixel_trim_max]*32
@@ -144,7 +148,7 @@ try:
             modified_registers = list(range(32)) + [32]
             controller.write_configuration(chip, modified_registers)
             # Check for high rate channels
-            controller.enable(chip_id=chip_id, io_chain=io_chain)
+            controller.enable(chip_id=chip_id, io_chain=io_chain, channel_list=enabled_channels)
             high_threshold_channels = set()
             break_flag = False
             while not break_flag:
@@ -230,7 +234,7 @@ try:
             log.info('begin quick pixel trim scan for %d-c%d' % chip_info)
             pixel_trim = pixel_trim_max
             disabled_channels = [] # channels that are disabled during quick pixel trim scan
-            channel_at_threshold = [channel in high_threshold_channels for channel in range(32)]
+            channel_at_threshold = [channel in high_threshold_channels or channel not in enabled_channels for channel in range(32)]
             while pixel_trim >= pixel_trim_min:
                 larpix_scripting.clear_buffer(controller)
                 chip.config.pixel_trim_thresholds = pixel_trims

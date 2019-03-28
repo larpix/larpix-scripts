@@ -1245,7 +1245,8 @@ def test_leakage_current(controller=None, chip_idx=0, board=None, reset_cycles=N
         }
     log.info('clear buffer')
     larpix_scripting.clear_buffer(controller)
-    del controller.reads[-1]
+    if controller.reads:
+        del controller.reads[-1]
     for channel in channel_list:
         chip.config.disable_channels()
         chip.config.enable_channels([channel])
@@ -1253,7 +1254,8 @@ def test_leakage_current(controller=None, chip_idx=0, board=None, reset_cycles=N
         # flush buffer
         log.info('clear buffer')
         larpix_scripting.clear_buffer(controller)
-        del controller.reads[-1]
+        if controller.reads:
+            del controller.reads[-1]
         # run for run_time
         log.info('begin test (runtime = %.1f, channel = %d)' % (run_time, channel))
         controller.run(run_time,'leakage current test')
@@ -1702,7 +1704,8 @@ def test_min_signal_amplitude(controller=None, board=None, chip_idx=0,
             log.info('  pulse amp: %d' % dac_amp)
             dac_level = max_dac_amp
             larpix_scripting.clear_buffer(controller)
-            del controller.reads[-1]
+            if controller.reads:
+                del controller.reads[-1]
             pulses_issued = 0
             triggers_received = 0
             for pulse_idx in range(n_pulses):
@@ -1712,7 +1715,8 @@ def test_min_signal_amplitude(controller=None, board=None, chip_idx=0,
                     controller.write_configuration(chip,46)
                     time.sleep(0.1) # Wait for front-end to settle
                     larpix_scripting.clear_buffer(controller)
-                    del controller.reads[-1]
+                    if controller.reads:
+                        del controller.reads[-1]
                     dac_level = testpulse_dac_max
                 # Issue pulse
                 dac_level -= dac_amp  # Negative DAC step mimics electron arrival
@@ -1721,17 +1725,14 @@ def test_min_signal_amplitude(controller=None, board=None, chip_idx=0,
                 triggers_received += len(result)
             log.info('pulses issued: %d, triggers received: %d' % (pulses_issued,
                                                                 triggers_received))
+            results[channel]['min_pulse_dac'] = dac_amp
+            results[channel]['eff'] = triggers_received / pulses_issued
             if triggers_received / pulses_issued >= threshold_trigger_rate:
-                results[channel]['min_pulse_dac'] = dac_amp
-                results[channel]['eff'] = triggers_received / pulses_issued
                 break
     log.info('summary (channel, trim, min_pulse_dac, eff):')
     for idx,channel in enumerate(results.keys()):
-        try:
-            log.info('%d %d %d %.2f' % (channel, trim[idx], results[channel]['min_pulse_dac'],
-                                     results[channel]['eff']))
-        except:
-            pass
+        log.info('%d %d %d %.2f' % (channel, trim[idx], results[channel]['min_pulse_dac'],
+            results[channel]['eff']))
     return results
 
 @use_quickcontroller
