@@ -1476,7 +1476,7 @@ def noise_test_internal_pulser(board=None, chip_idx=0, n_pulses=1000,
         elif len(result[-1]) - 32 < 0:
             lost += 1
         log.info('pulse: %4d, received: %4d, DAC: %4d' % (pulse_idx, len(result[-1]), dac_level))
-        log.info(result[-1])
+        #log.info(result[-1])
 
     # Keep a handle to chip data, and return
     flush_logger()
