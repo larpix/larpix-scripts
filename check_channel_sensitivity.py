@@ -17,6 +17,7 @@ import logging
 from helpers.script_logging import ScriptLogger
 import helpers.pathnames as pathnames
 import helpers.larpix_scripting as larpix_scripting
+import helpers.script_plotting as script_plotting
 import time
 import larpix.larpix as larpix
 from larpix.serialport import SerialPort
@@ -62,6 +63,8 @@ parser.add_argument('-s','--configuration_file', default=None,
 parser.add_argument('-c','--chips', default=None, nargs='+', type=int,
                     help='chips to include in scan '
                     '(optional, default: all chips in chipset file)')
+parser.add_argument('-p','--plot', action='store_true',
+                    help='generate and save plots (optional)')
 args = parser.parse_args()
 
 infile = args.board
@@ -77,6 +80,7 @@ if config_file is None:
     config_file = pathnames.default_config_dir(start_time)
     default_config = pathnames.make_default_config(start_time, default_config)
 chips_to_scan = args.chips
+make_plots = args.plot
 
 return_code = 0
 
@@ -142,6 +146,7 @@ try:
     log.info('all chips sensitivity check complete')
 
     # Print sensitivity test results
+    plot_data = []
     for chip_idx,chip in enumerate(controller.chips):
         chip_id = chip.chip_id
         io_chain = chip.io_chain
@@ -153,6 +158,37 @@ try:
                          (board_info, io_chain, chip_id, channel,
                           board_results[chip_idx][channel]['min_pulse_dac'],
                           board_results[chip_idx][channel]['eff']))
+        if make_plots:
+            plot_data += [(chip_idx, chip_id, io_chain, [channel for channel in board_results[chip_idx].keys()], [board_results[chip_idx][channel]['pulse_dac'] for channel in board_results[chip_idx].keys()], [board_results[chip_idx][channel]['n_triggers'] for channel in board_results[chip_idx].keys()], [board_results[chip_idx][channel]['n_pulses'] for channel in board_results[chip_idx].keys()])]
+
+    if make_plots:
+        script_plotting.MAX_PULSE_AMP = max_dac_amp
+        # Save thresholds
+        figure_title = os.path.basename(script_logfile.replace('.log','.pdf'))
+        fig, ax = script_plotting.plot_trigger_threshold(plot_data, figure_title=figure_title)
+        log.info('Saving plot to {}...'.format(outdir + '/' + figure_title))
+        script_plotting.save_figure(fig, outdir + '/' + figure_title)
+
+        # Save 2d histogram
+        figure_title = os.path.basename(script_logfile.replace('.log','_hist2d.pdf'))
+        fig, ax = script_plotting.plot_trigger_threshold_hist2d(plot_data, figure_title=figure_title)
+        log.info('Saving plot to {}...'.format(outdir + '/' + figure_title))
+        script_plotting.save_figure(fig, outdir + '/' + figure_title)
+
+        # Save 1D histograms
+        figure_title = os.path.basename(script_logfile.replace('.log','_hist.pdf'))
+        fig, ax = script_plotting.plot_trigger_threshold_hist(plot_data, figure_title=figure_title, label='All chips')
+        log.info('Saving plot to {}...'.format(outdir + '/' + figure_title))
+        script_plotting.save_figure(fig, outdir + '/' + figure_title)
+
+        for chip_idx in range(len(plot_data)):
+            chip = controller.chips[chip_idx]
+            chip_id = chip.chip_id
+            io_chain = chip.io_chain
+            figure_title = os.path.basename(script_logfile.replace('.log','_hist_{}-{}-c{}.pdf'.format(board_info, io_chain, chip_id)))
+            fig, ax = script_plotting.plot_trigger_threshold_hist([plot_data[chip_idx]], figure_title=figure_title, label='Chip {}, IO chain {}'.format(chip_id, io_chain))
+            log.info('Saving plot to {}...'.format(outdir + '/' + figure_title))
+            script_plotting.save_figure(fig, outdir + '/' + figure_title)
 
 except Exception as error:
     log.exception(error)

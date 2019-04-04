@@ -17,6 +17,7 @@ import logging
 from helpers.script_logging import ScriptLogger
 import helpers.pathnames as pathnames
 import helpers.larpix_scripting as larpix_scripting
+import helpers.script_plotting as script_plotting
 import time
 import larpix.larpix as larpix
 import larpix.serialport as serialport
@@ -52,6 +53,8 @@ parser.add_argument('-s','--configuration_file', default=None,
 parser.add_argument('-c','--chips', default=None, nargs='+', type=int,
                     help='chips to include in scan '
                     '(optional, default: all chips in chipset file)')
+parser.add_argument('-p','--plot', action='store_true',
+                    help='generate and save plots (optional)')
 args = parser.parse_args()
 
 infile = args.board
@@ -64,6 +67,7 @@ if config_file is None:
     config_file = pathnames.default_config_dir(start_time)
     default_config = pathnames.make_default_config(start_time, default_config)
 chips_to_scan = args.chips
+make_plots = args.plot
 
 return_code = 0
 
@@ -109,7 +113,7 @@ try:
                                                                 global_threshold=\
                                                                     global_threshold,
                                                                 run_time=run_time)
-            board_results += [chip_results[1:]]
+            board_results += [chip_results]
             larpix_scripting.clear_stored_packets(controller)
             finish_time = time.time()
             if verbose:
@@ -125,32 +129,79 @@ try:
     log.info('all chips pedestal complete')
 
     # Print pedestal scan results
+    plot_data = []
     for chip_idx,chip in enumerate(controller.chips):
         chip_id = chip.chip_id
         io_chain = chip.io_chain
         if board_results[chip_idx] is None:
             log.info('%s-%d-c%d skipped' % (board_info, io_chain, chip_id))
             continue
-        chip_ped_mean = sum(board_results[chip_idx][0].values()) /\
-            len(board_results[chip_idx][0].values())
+        chip_ped_mean = sum(board_results[chip_idx][1].values()) /\
+            len(board_results[chip_idx][1].values())
         chip_ped_rms = sum(abs(ped - chip_ped_mean)
-                           for ped in board_results[chip_idx][0].values()) /\
-                           len(board_results[chip_idx][0])
+                           for ped in board_results[chip_idx][1].values()) /\
+                           len(board_results[chip_idx][1])
         log.info('%s-%d-c%d mean pedestal: %.2f adc, rms: %.2f adc' % \
                      (board_info, io_chain, chip_id, chip_ped_mean, chip_ped_rms))
 
-        chip_width_mean = sum(board_results[chip_idx][1].values()) /\
-            len(board_results[chip_idx][1].values())
+        chip_width_mean = sum(board_results[chip_idx][2].values()) /\
+            len(board_results[chip_idx][2].values())
         chip_width_rms = sum(abs(width - chip_width_mean)
-                             for width in board_results[chip_idx][1].values())/\
-                             len(board_results[chip_idx][1])
+                             for width in board_results[chip_idx][2].values())/\
+                             len(board_results[chip_idx][2])
         log.info('%s-%d-c%d mean width: %.2f adc, rms: %.2f adc' % \
                      (board_info, io_chain, chip_id, chip_width_mean, chip_width_rms))
-        for channel in board_results[chip_idx][0].keys():
+        for channel in board_results[chip_idx][1].keys():
             log.info('%s-%d-c%d-ch%d pedestal: %.2f adc, width: %.2f adc' % \
                          (board_info, io_chain, chip_id, channel,
-                          board_results[chip_idx][0][channel],
-                          board_results[chip_idx][1][channel]))
+                          board_results[chip_idx][1][channel],
+                          board_results[chip_idx][2][channel]))
+        if make_plots:
+            plot_data += [(chip_idx, chip_id, io_chain, [channel for channel in board_results[chip_idx][0].keys()], [board_results[chip_idx][0][channel] for channel in board_results[chip_idx][0].keys()])]
+
+    if make_plots:
+        # Save profile
+        figure_title = os.path.basename(script_logfile.replace('.log','.pdf'))
+        fig, ax = script_plotting.plot_pedestal_width(plot_data, figure_title=figure_title)
+        log.info('Saving plot to {}...'.format(outdir + '/' + figure_title))
+        script_plotting.save_figure(fig, outdir + '/' + figure_title)
+
+        # Save 2d histogram
+        figure_title = os.path.basename(script_logfile.replace('.log','_hist2d.pdf'))
+        fig, ax = script_plotting.plot_pedestal_width_hist2d(plot_data, figure_title=figure_title)
+        log.info('Saving plot to {}...'.format(outdir + '/' + figure_title))
+        script_plotting.save_figure(fig, outdir + '/' + figure_title)
+
+        # Save 1D histograms of ADC mean
+        figure_title = os.path.basename(script_logfile.replace('.log','_mean_hist.pdf'))
+        fig, ax = script_plotting.plot_pedestal_width_mean_hist(plot_data, figure_title=figure_title, label='All chips')
+        log.info('Saving plot to {}...'.format(outdir + '/' + figure_title))
+        script_plotting.save_figure(fig, outdir + '/' + figure_title)
+
+        for chip_idx in range(len(plot_data)):
+            chip = controller.chips[chip_idx]
+            chip_id = chip.chip_id
+            io_chain = chip.io_chain
+            figure_title = os.path.basename(script_logfile.replace('.log','_mean_hist_{}-{}-c{}.pdf'.format(board_info, io_chain, chip_id)))
+            fig, ax = script_plotting.plot_pedestal_width_mean_hist([plot_data[chip_idx]], figure_title=figure_title, label='Chip {}, IO chain {}'.format(chip_id, io_chain))
+            log.info('Saving plot to {}...'.format(outdir + '/' + figure_title))
+            script_plotting.save_figure(fig, outdir + '/' + figure_title)
+
+        # Save 1D histograms of ADC rms
+        figure_title = os.path.basename(script_logfile.replace('.log','_rms_hist.pdf'))
+        fig, ax = script_plotting.plot_pedestal_width_rms_hist(plot_data, figure_title=figure_title, label='All chips')
+        log.info('Saving plot to {}...'.format(outdir + '/' + figure_title))
+        script_plotting.save_figure(fig, outdir + '/' + figure_title)
+
+        for chip_idx in range(len(plot_data)):
+            chip = controller.chips[chip_idx]
+            chip_id = chip.chip_id
+            io_chain = chip.io_chain
+            figure_title = os.path.basename(script_logfile.replace('.log','_rms_hist_{}-{}-c{}.pdf'.format(board_info, io_chain, chip_id)))
+            fig, ax = script_plotting.plot_pedestal_width_rms_hist([plot_data[chip_idx]], figure_title=figure_title, label='Chip {}, IO chain {}'.format(chip_id, io_chain))
+            log.info('Saving plot to {}...'.format(outdir + '/' + figure_title))
+            script_plotting.save_figure(fig, outdir + '/' + figure_title)
+
 except Exception as error:
     log.exception(error)
     return_code = 1

@@ -1670,18 +1670,26 @@ def test_min_signal_amplitude(controller=None, board=None, chip_idx=0,
                               testpulse_dac_min=128, reset_cycles=4096):
     '''
     Pulse channel with increasing pulse sizes to determine the minimum pulse size for
-    triggering at >90%
+    triggering at >100%
     Results are formatted as:
     { <channel> : {
         'min_pulse_dac' : <min pulse size to trigger with better than specified efficiency>,
-        'eff' : <trigger efficiency at this pulse size>} },
+        'eff' : <trigger efficiency at this pulse size>,
+        'pulse_dac' : [<pulse amplitudes tested>],
+        'n_triggers' : [<number of triggers at pulse dac>],
+        'n_pulses' : [<number of injected pulses>]
+        } },
     ...
     }
     '''
     chip = controller.chips[chip_idx]
     results = {}
     for channel_idx, channel in enumerate(channel_list):
-        results[channel] = {}
+        results[channel] = {
+            'pulse_dac': [],
+            'n_triggers': [],
+            'n_pulses': []
+        }
         log.info('configuring for chip %d channel %d' % (chip.chip_id, channel))
         # Configure chip for pulsing one channel
         controller.disable(chip_id=chip.chip_id)
@@ -1727,6 +1735,9 @@ def test_min_signal_amplitude(controller=None, board=None, chip_idx=0,
                                                                 triggers_received))
             results[channel]['min_pulse_dac'] = dac_amp
             results[channel]['eff'] = triggers_received / pulses_issued
+            results[channel]['pulse_dac'] += [dac_amp]
+            results[channel]['n_triggers'] += [triggers_received]
+            results[channel]['n_pulses'] += [pulses_issued]
             if triggers_received / pulses_issued >= threshold_trigger_rate:
                 break
     log.info('summary (channel, trim, min_pulse_dac, eff):')

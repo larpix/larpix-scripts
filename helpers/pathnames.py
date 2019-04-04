@@ -58,7 +58,7 @@ def default_data_logdir(start_time):
 
 def default_data_logfile(start_time):
     logfile = default_data_logdir(start_time) + 'datalog_' + \
-        time.strftime('%Y_%m_%d_%H_%M_%S_%Z') + '.dat'
+        time.strftime('%Y_%m_%d_%H_%M_%S_%Z') + '.dat.gz'
     return logfile
 
 def mkdir_p(path):
