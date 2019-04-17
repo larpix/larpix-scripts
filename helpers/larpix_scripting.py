@@ -107,7 +107,7 @@ def enforce_chip_configuration(controller):
     If not, attempt to reload configurations that do not match.
     '''
     error_flag = False
-    max_attempts = 5
+    max_attempts = 3
     clear_buffer(controller)
     config_ok, different_registers = verify_chip_configuration(controller)
     if not config_ok:
@@ -198,7 +198,7 @@ def load_chip_configurations(controller, board, config_path, silence=False,
                     try:
                         chip.config.load(default_config)
 
-                        log.info(('%s-%d-c%d default config '+default_config+' loaded') % 
+                        log.info(('%s-%d-c%d default config '+default_config+' loaded') %
                                  chip_identifier)
                     except IOError as error:
                         log.exception(error)

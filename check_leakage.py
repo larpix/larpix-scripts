@@ -129,12 +129,13 @@ try:
             log.error('%d-c%d leakage test failed!' % chip_info)
             controller.disable(chip_id=chip_id, io_chain=io_chain)
             return_code = 2
+            board_results += [None]
             continue
 
     log.info('all chips leakage check complete')
 
     # Print leakage test results
-    log.info('leakage rate threshold (global, trim): %d - %d' % 
+    log.info('leakage rate threshold (global, trim): %d - %d' %
              (global_threshold, pixel_trim))
     plot_data = []
     for chip_idx,chip in enumerate(controller.chips):

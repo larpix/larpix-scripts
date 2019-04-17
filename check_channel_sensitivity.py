@@ -129,7 +129,7 @@ try:
                 min_dac_amp=min_dac_amp,
                 max_dac_amp=max_dac_amp,
                 reset_cycles=chip.config.reset_cycles)
-                                                                     
+
             board_results += [chip_results]
             larpix_scripting.clear_stored_packets(controller)
             finish_time = time.time()
@@ -141,6 +141,7 @@ try:
             log.error('%d-c%d sensitivity test failed!' % chip_info)
             controller.disable(chip_id=chip_id, io_chain=io_chain)
             return_code = 2
+            board_results += [None]
             continue
 
     log.info('all chips sensitivity check complete')
@@ -181,12 +182,22 @@ try:
         log.info('Saving plot to {}...'.format(outdir + '/' + figure_title))
         script_plotting.save_figure(fig, outdir + '/' + figure_title)
 
+        figure_title = os.path.basename(script_logfile.replace('.log','_resp.pdf'))
+        fig, ax = script_plotting.plot_cumulative_response(plot_data, figure_title=figure_title, label='All chips')
+        log.info('Saving plot to {}...'.format(outdir + '/' + figure_title))
+        script_plotting.save_figure(fig, outdir + '/' + figure_title)
+
         for chip_idx in range(len(plot_data)):
             chip = controller.chips[chip_idx]
             chip_id = chip.chip_id
             io_chain = chip.io_chain
             figure_title = os.path.basename(script_logfile.replace('.log','_hist_{}-{}-c{}.pdf'.format(board_info, io_chain, chip_id)))
             fig, ax = script_plotting.plot_trigger_threshold_hist([plot_data[chip_idx]], figure_title=figure_title, label='Chip {}, IO chain {}'.format(chip_id, io_chain))
+            log.info('Saving plot to {}...'.format(outdir + '/' + figure_title))
+            script_plotting.save_figure(fig, outdir + '/' + figure_title)
+
+            figure_title = os.path.basename(script_logfile.replace('.log','_resp_{}-{}-c{}.pdf'.format(board_info, io_chain, chip_id)))
+            fig, ax = script_plotting.plot_cumulative_response([plot_data[chip_idx]], figure_title=figure_title, label='Chip {}, IO chain {}'.format(chip_id, io_chain))
             log.info('Saving plot to {}...'.format(outdir + '/' + figure_title))
             script_plotting.save_figure(fig, outdir + '/' + figure_title)
 

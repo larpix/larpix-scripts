@@ -90,7 +90,7 @@ try:
         controller, board_info, config_file, silence=True, default_config=default_config)
     if config_ok:
         log.info('initial configuration of chips complete')
-    
+
     # Run low pedestal test on each chip
     board_results = []
     for chip_idx,chip in enumerate(controller.chips):
@@ -124,6 +124,7 @@ try:
             log.error('%d-c%d pedestal scan failed!' % chip_info)
             controller.disable(chip_id=chip_id, io_chain=io_chain)
             return_code = 2
+            board_results += [None]
             continue
 
     log.info('all chips pedestal complete')
